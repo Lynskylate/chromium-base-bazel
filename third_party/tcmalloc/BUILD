@@ -29,7 +29,7 @@ cc_library(
         "TCMALLOC_USE_DOUBLYLINKED_FREELIST",
         "TCMALLOC_DISABLE_HUGE_ALLOCATIONS",
         # On linux when we use the alloc shim
-        "TCMALLOC_DONT_REPLACE_SYSTEM_ALLOC",
+        #"TCMALLOC_DONT_REPLACE_SYSTEM_ALLOC",
     ],
     includes = [
         ".",
@@ -52,22 +52,5 @@ cc_library(
     deps = [
         "//build:build_config",
         "//third_party/dynamic_annotations",
-    ],
-)
-
-cc_test(
-    name = "unit",
-    testonly = True,
-    srcs = [
-        "chromium/src/tests/addressmap_unittest.cc",
-    ],
-    includes = [
-        ".",
-        "chromium/src",
-        "chromium/src/base",
-    ],
-    licenses = ["permissive"],
-    deps = [
-        ":tcmalloc",
     ],
 )

@@ -1,3 +1,4 @@
+// -*- Mode: C++; c-basic-offset: 2; indent-tabs-mode: nil -*-
 // Copyright (c) 2003, Google Inc.
 // All rights reserved.
 // 
@@ -43,13 +44,14 @@
 #include <windows.h>            // for GetTickCount()
 #endif
 #include <vector>
-#include "base/logging.h"
 #include "common.h"
 #include <gperftools/malloc_extension.h>
 
+#include "gtest/gtest.h"
+
 using std::vector;
 
-int main(int argc, char** argv) {
+TEST(FragmentHeapUnitTest, FragmentHeap) {
   // Make kAllocSize one page larger than the maximum small object size.
   static const int kAllocSize = kMaxSize + kPageSize;
   // Allocate 400MB in total.
@@ -78,17 +80,17 @@ int main(int argc, char** argv) {
   size_t slack_after;
   MallocExtension::instance()->GetNumericProperty("tcmalloc.slack_bytes",
                                                   &slack_after);
-  CHECK_GE(slack_after, slack_before);
+  ASSERT_GE(slack_after, slack_before);
   size_t slack = slack_after - slack_before;
 
-  CHECK_GT(double(slack), 0.9*free_bytes);
-  CHECK_LT(double(slack), 1.1*free_bytes);
+  ASSERT_GT(double(slack), 0.9*free_bytes);
+  ASSERT_LT(double(slack), 1.1*free_bytes);
 
   // Dump malloc stats
   static const int kBufSize = 1<<20;
   char* buffer = new char[kBufSize];
   MallocExtension::instance()->GetStats(buffer, kBufSize);
-  VLOG(1, "%s", buffer);
+ // VLOG(1, "%s", buffer);
   delete[] buffer;
 
   // Now do timing tests
@@ -123,10 +125,7 @@ int main(int argc, char** argv) {
 #else
 # error No way to calculate time on your system
 #endif
-    fprintf(stderr, "getproperty: %6.1f ns/call\n",
-            (sumsec * 1e9 + sumusec * 1e3) / kIterations);
+    //fprintf(stderr, "getproperty: %6.1f ns/call\n",
+            //(sumsec * 1e9 + sumusec * 1e3) / kIterations);
   }
-
-  printf("PASS\n");
-  return 0;
 }

@@ -1,3 +1,4 @@
+// -*- Mode: C++; c-basic-offset: 2; indent-tabs-mode: nil -*-
 // Copyright (c) 2005, Google Inc.
 // All rights reserved.
 //
@@ -40,6 +41,8 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/time.h>     // for setitimer
+
+#include "gtest/gtest.h"
 
 // Needs to be volatile so compiler doesn't try to optimize it away
 static volatile void* getpc_retval = NULL;    // what GetPC returns
@@ -91,7 +94,7 @@ static void RoutineCallingTheSignal() {
 // I can imagine it would be even bigger in 64-bit architectures.)
 const int kRoutineSize = 512 * sizeof(void*)/4;    // allow 1024 for 64-bit
 
-int main(int argc, char** argv) {
+TEST(GetPCUnitTest, GetPC) {
   RoutineCallingTheSignal();
 
   // Annoyingly, C++ disallows casting pointer-to-function to
@@ -99,22 +102,18 @@ int main(int argc, char** argv) {
   char* expected = (char*)&RoutineCallingTheSignal;
   char* actual = (char*)getpc_retval;
 
-  // For ia64, ppc64, and parisc64, the function pointer is actually
+  // For ia64, ppc64v1, and parisc64, the function pointer is actually
   // a struct.  For instance, ia64's dl-fptr.h:
   //   struct fdesc {          /* An FDESC is a function descriptor.  */
   //      ElfW(Addr) ip;      /* code entry point */
   //      ElfW(Addr) gp;      /* global pointer */
   //   };
   // We want the code entry point.
-#if defined(__ia64) || defined(__ppc64)     // NOTE: ppc64 is UNTESTED
+  // NOTE: ppc64 ELFv2 (Little Endian) does not have function pointers
+#if defined(__ia64) || \
+    (defined(__powerpc64__) && _CALL_ELF != 2)
   expected = ((char**)expected)[0];         // this is "ip"
 #endif
-
-  if (actual < expected || actual > expected + kRoutineSize) {
-    printf("Test FAILED: actual PC: %p, expected PC: %p\n", actual, expected);
-    return 1;
-  } else {
-    printf("PASS\n");
-    return 0;
-  }
+  ASSERT_GE(actual, expected);
+  ASSERT_LT(actual, expected + kRoutineSize);
 }

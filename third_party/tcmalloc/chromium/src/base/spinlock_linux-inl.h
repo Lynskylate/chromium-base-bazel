@@ -1,3 +1,4 @@
+// -*- Mode: C++; c-basic-offset: 2; indent-tabs-mode: nil -*-
 /* Copyright (c) 2009, Google Inc.
  * All rights reserved.
  * 
@@ -41,6 +42,17 @@
 #define FUTEX_WAKE 1
 #define FUTEX_PRIVATE_FLAG 128
 
+// Note: Instead of making direct system calls that are inlined, we rely
+//       on the syscall() function in glibc to do the right thing. This
+//       is necessary to make the code compatible with the seccomp sandbox,
+//       which needs to be able to find and patch all places where system
+//       calls are made. Scanning through and patching glibc is fast, but
+//       doing so on the entire Chrome binary would be prohibitively
+//       expensive.
+//       This is a notable change from the upstream version of tcmalloc,
+//       which prefers direct system calls in order to improve compatibility
+//       with older toolchains and runtime libraries.
+
 namespace base {
 namespace internal {
 
@@ -49,21 +61,18 @@ void SpinLockDelay(volatile Atomic32 *w, int32 value, int loop) {
     int save_errno = errno;
     struct timespec tm;
     tm.tv_sec = 0;
-    // Wait between 0-16ms.
     tm.tv_nsec = base::internal::SuggestedDelayNS(loop);
-    // Note: since Unlock() is optimized to not do a compare-and-swap,
-    // we can't expect explicit wake-ups. Therefore we shouldn't wait too
-    // long here.
+    tm.tv_nsec *= 16;  // increase the delay; we expect explicit wakeups
     syscall(__NR_futex, reinterpret_cast<int*>(const_cast<Atomic32*>(w)),
             FUTEX_WAIT | FUTEX_PRIVATE_FLAG, value,
-            reinterpret_cast<struct kernel_timespec*>(&tm));
+            reinterpret_cast<struct kernel_timespec*>(&tm), NULL, 0);
     errno = save_errno;
   }
 }
 
 void SpinLockWake(volatile Atomic32 *w, bool all) {
   syscall(__NR_futex, reinterpret_cast<int*>(const_cast<Atomic32*>(w)),
-          FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1, 0);
+          FUTEX_WAKE | FUTEX_PRIVATE_FLAG, all ? INT_MAX : 1, NULL, NULL, 0);
 }
 
 } // namespace internal

@@ -1,3 +1,4 @@
+// -*- Mode: C++; c-basic-offset: 2; indent-tabs-mode: nil -*-
 /* Copyright (c) 2006, Google Inc.
  * All rights reserved.
  * 
@@ -33,8 +34,9 @@
 #include <stdio.h>
 #include <map>
 #include "base/low_level_alloc.h"
-#include "base/logging.h"
 #include <gperftools/malloc_hook.h>
+
+#include "gtest/gtest.h"
 
 using std::map;
 
@@ -49,7 +51,7 @@ struct BlockDesc {
 // by RandomizeBlockDesc is still there.
 static void CheckBlockDesc(const BlockDesc &d) {
   for (int i = 0; i != d.len; i++) {
-    CHECK((d.ptr[i] & 0xff) == ((d.fill + i) & 0xff));
+    ASSERT_TRUE((d.ptr[i] & 0xff) == ((d.fill + i) & 0xff));
   }
 }
 
@@ -64,7 +66,7 @@ static void RandomizeBlockDesc(BlockDesc *d) {
 
 // Use to indicate to the malloc hooks that
 // this calls is from LowLevelAlloc.
-static bool using_low_level_alloc = false;
+static volatile bool using_low_level_alloc = false;
 
 // n times, toss a coin, and based on the outcome
 // either allocate a new block or deallocate an old block.
@@ -78,7 +80,7 @@ static bool using_low_level_alloc = false;
 // If call_malloc_hook is true and user_arena is true,
 // allocations and deallocations are reported via the MallocHook
 // interface.
-static void Test(bool use_new_arena, bool call_malloc_hook, int n) {
+static void TestMethod(bool use_new_arena, bool call_malloc_hook, int n) {
   typedef map<int, BlockDesc> AllocMap;
   AllocMap allocated;
   AllocMap::iterator it;
@@ -109,7 +111,7 @@ static void Test(bool use_new_arena, bool call_malloc_hook, int n) {
       rnd = rand();
       it = allocated.find(rnd);
       if (it != allocated.end()) {
-        CheckBlockDesc(it->second);
+        ASSERT_NO_FATAL_FAILURE(CheckBlockDesc(it->second));
         using_low_level_alloc = true;
         LowLevelAlloc::Free(it->second.ptr);
         using_low_level_alloc = false;
@@ -121,7 +123,7 @@ static void Test(bool use_new_arena, bool call_malloc_hook, int n) {
     case 1:     // coin came up tails: remove a block
       it = allocated.begin();
       if (it != allocated.end()) {
-        CheckBlockDesc(it->second);
+        ASSERT_NO_FATAL_FAILURE(CheckBlockDesc(it->second));
         using_low_level_alloc = true;
         LowLevelAlloc::Free(it->second.ptr);
         using_low_level_alloc = false;
@@ -132,14 +134,14 @@ static void Test(bool use_new_arena, bool call_malloc_hook, int n) {
   }
   // remove all remaniing blocks
   while ((it = allocated.begin()) != allocated.end()) {
-    CheckBlockDesc(it->second);
+    ASSERT_NO_FATAL_FAILURE(CheckBlockDesc(it->second));
     using_low_level_alloc = true;
     LowLevelAlloc::Free(it->second.ptr);
     using_low_level_alloc = false;
     allocated.erase(it);
   }
   if (use_new_arena) {
-    CHECK(LowLevelAlloc::DeleteArena(arena));
+    ASSERT_TRUE(LowLevelAlloc::DeleteArena(arena));
   }
 }
 
@@ -161,36 +163,27 @@ static void FreeHook(const void *p) {
   }
 }
 
-int main(int argc, char *argv[]) {
-  // This is needed by maybe_threads_unittest.sh, which parses argv[0]
-  // to figure out what directory low_level_alloc_unittest is in.
-  if (argc != 1) {
-    fprintf(stderr, "USAGE: %s\n", argv[0]);
-    return 1;
-  }
-
-  CHECK(MallocHook::AddNewHook(&AllocHook));
-  CHECK(MallocHook::AddDeleteHook(&FreeHook));
-  CHECK_EQ(allocates, 0);
-  CHECK_EQ(frees, 0);
-  Test(false, false, 50000);
-  CHECK_NE(allocates, 0);   // default arena calls hooks
-  CHECK_NE(frees, 0);
+TEST(LowLevelAllocUnitTest, LowLevelAlloc) {
+  ASSERT_TRUE(MallocHook::AddNewHook(&AllocHook));
+  ASSERT_TRUE(MallocHook::AddDeleteHook(&FreeHook));
+  ASSERT_EQ(allocates, 0);
+  ASSERT_EQ(frees, 0);
+  ASSERT_NO_FATAL_FAILURE(TestMethod(false, false, 50000));
+  ASSERT_NE(allocates, 0);   // default arena calls hooks
+  ASSERT_NE(frees, 0);
   for (int i = 0; i != 16; i++) {
     bool call_hooks = ((i & 1) == 1);
     allocates = 0;
     frees = 0;
-    Test(true, call_hooks, 15000);
+    ASSERT_NO_FATAL_FAILURE(TestMethod(true, call_hooks, 15000));
     if (call_hooks) {
-      CHECK_GT(allocates, 5000); // arena calls hooks
-      CHECK_GT(frees, 5000);
+      ASSERT_GT(allocates, 5000); // arena calls hooks
+      ASSERT_GT(frees, 5000);
     } else {
-      CHECK_EQ(allocates, 0);    // arena doesn't call hooks
-      CHECK_EQ(frees, 0);
+      ASSERT_EQ(allocates, 0);    // arena doesn't call hooks
+      ASSERT_EQ(frees, 0);
     }
   }
-  printf("\nPASS\n");
-  CHECK(MallocHook::RemoveNewHook(&AllocHook));
-  CHECK(MallocHook::RemoveDeleteHook(&FreeHook));
-  return 0;
+  ASSERT_TRUE(MallocHook::RemoveNewHook(&AllocHook));
+  ASSERT_TRUE(MallocHook::RemoveDeleteHook(&FreeHook));
 }
