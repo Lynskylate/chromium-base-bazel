@@ -88,3 +88,35 @@ cc_test(
 )
 
 # TODO keep going with migrating tests
+
+cc_test(
+    name = "malloc_extension_test",
+    srcs = [
+        "malloc_extension_test.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
+
+cc_test(
+    name = "malloc_hook_test",
+    srcs = [
+        "malloc_hook_test.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
+
+# TODO continue with unit tests
+
+#cc_test(
+#    name = "markidle_unittest",
+#    srcs = [
+#        "markidle_unittest.cc",
+#    ],
+#    copts = CXXOPTS,
+#    licenses = ["permissive"],
+#    deps = [":test_util"],
+#)

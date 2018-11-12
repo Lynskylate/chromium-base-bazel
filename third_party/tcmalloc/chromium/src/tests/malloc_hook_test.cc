@@ -45,10 +45,11 @@
 #include <vector>
 #include <gperftools/malloc_hook.h>
 #include "malloc_hook-inl.h"
-#include "base/logging.h"
 #include "base/simple_mutex.h"
 #include "base/sysinfo.h"
 #include "tests/testutil.h"
+
+#include "gtest/gtest.h"
 
 // On systems (like freebsd) that don't define MAP_ANONYMOUS, use the old
 // form of the name instead.
@@ -62,25 +63,6 @@ using std::string;
 using std::vector;
 
 vector<void (*)()> g_testlist;  // the tests to run
-
-#define TEST(a, b)                                      \
-  struct Test_##a##_##b {                               \
-    Test_##a##_##b() { g_testlist.push_back(&Run); }    \
-    static void Run();                                  \
-  };                                                    \
-  static Test_##a##_##b g_test_##a##_##b;               \
-  void Test_##a##_##b::Run()
-
-
-static int RUN_ALL_TESTS() {
-  vector<void (*)()>::const_iterator it;
-  for (it = g_testlist.begin(); it != g_testlist.end(); ++it) {
-    (*it)();   // The test will error-exit if there's a problem.
-  }
-  fprintf(stderr, "\nPassed %d tests\n\nPASS\n",
-          static_cast<int>(g_testlist.size()));
-  return 0;
-}
 
 void Sleep(int seconds) {
 #ifdef _MSC_VER
@@ -119,90 +101,90 @@ bool TestHookList_Remove(TestHookList* list, int val) {
 // the cast.
 #define INIT_HOOK_LIST(initial_value) { 1, { initial_value } }
 
-TEST(HookListTest, InitialValueExists) {
+TEST(HookListUnitTest, InitialValueExists) {
   TestHookList list = INIT_HOOK_LIST(69);
   uintptr_t values[2] = { 0, 0 };
-  EXPECT_EQ(1, TestHookList_Traverse(list, values, 2));
-  EXPECT_EQ(69, values[0]);
-  EXPECT_EQ(1, list.priv_end);
+  ASSERT_EQ(1, TestHookList_Traverse(list, values, 2));
+  ASSERT_EQ(69, values[0]);
+  ASSERT_EQ(1, list.priv_end);
 }
 
-TEST(HookListTest, CanRemoveInitialValue) {
+TEST(HookListUnitTest, CanRemoveInitialValue) {
   TestHookList list = INIT_HOOK_LIST(69);
   ASSERT_TRUE(TestHookList_Remove(&list, 69));
-  EXPECT_EQ(0, list.priv_end);
+  ASSERT_EQ(0, list.priv_end);
 
   uintptr_t values[2] = { 0, 0 };
-  EXPECT_EQ(0, TestHookList_Traverse(list, values, 2));
+  ASSERT_EQ(0, TestHookList_Traverse(list, values, 2));
 }
 
-TEST(HookListTest, AddAppends) {
+TEST(HookListUnitTest, AddAppends) {
   TestHookList list = INIT_HOOK_LIST(69);
   ASSERT_TRUE(TestHookList_Add(&list, 42));
-  EXPECT_EQ(2, list.priv_end);
+  ASSERT_EQ(2, list.priv_end);
 
   uintptr_t values[2] = { 0, 0 };
-  EXPECT_EQ(2, TestHookList_Traverse(list, values, 2));
-  EXPECT_EQ(69, values[0]);
-  EXPECT_EQ(42, values[1]);
+  ASSERT_EQ(2, TestHookList_Traverse(list, values, 2));
+  ASSERT_EQ(69, values[0]);
+  ASSERT_EQ(42, values[1]);
 }
 
-TEST(HookListTest, RemoveWorksAndWillClearSize) {
+TEST(HookListUnitTest, RemoveWorksAndWillClearSize) {
   TestHookList list = INIT_HOOK_LIST(69);
   ASSERT_TRUE(TestHookList_Add(&list, 42));
 
   ASSERT_TRUE(TestHookList_Remove(&list, 69));
-  EXPECT_EQ(2, list.priv_end);
+  ASSERT_EQ(2, list.priv_end);
 
   uintptr_t values[2] = { 0, 0 };
-  EXPECT_EQ(1, TestHookList_Traverse(list, values, 2));
-  EXPECT_EQ(42, values[0]);
+  ASSERT_EQ(1, TestHookList_Traverse(list, values, 2));
+  ASSERT_EQ(42, values[0]);
 
   ASSERT_TRUE(TestHookList_Remove(&list, 42));
-  EXPECT_EQ(0, list.priv_end);
-  EXPECT_EQ(0, TestHookList_Traverse(list, values, 2));
+  ASSERT_EQ(0, list.priv_end);
+  ASSERT_EQ(0, TestHookList_Traverse(list, values, 2));
 }
 
-TEST(HookListTest, AddPrependsAfterRemove) {
+TEST(HookListUnitTest, AddPrependsAfterRemove) {
   TestHookList list = INIT_HOOK_LIST(69);
   ASSERT_TRUE(TestHookList_Add(&list, 42));
 
   ASSERT_TRUE(TestHookList_Remove(&list, 69));
-  EXPECT_EQ(2, list.priv_end);
+  ASSERT_EQ(2, list.priv_end);
 
   ASSERT_TRUE(TestHookList_Add(&list, 7));
-  EXPECT_EQ(2, list.priv_end);
+  ASSERT_EQ(2, list.priv_end);
 
   uintptr_t values[2] = { 0, 0 };
-  EXPECT_EQ(2, TestHookList_Traverse(list, values, 2));
-  EXPECT_EQ(7, values[0]);
-  EXPECT_EQ(42, values[1]);
+  ASSERT_EQ(2, TestHookList_Traverse(list, values, 2));
+  ASSERT_EQ(7, values[0]);
+  ASSERT_EQ(42, values[1]);
 }
 
-TEST(HookListTest, InvalidAddRejected) {
+TEST(HookListUnitTest, InvalidAddRejected) {
   TestHookList list = INIT_HOOK_LIST(69);
-  EXPECT_FALSE(TestHookList_Add(&list, 0));
+  ASSERT_FALSE(TestHookList_Add(&list, 0));
 
   uintptr_t values[2] = { 0, 0 };
-  EXPECT_EQ(1, TestHookList_Traverse(list, values, 2));
-  EXPECT_EQ(69, values[0]);
-  EXPECT_EQ(1, list.priv_end);
+  ASSERT_EQ(1, TestHookList_Traverse(list, values, 2));
+  ASSERT_EQ(69, values[0]);
+  ASSERT_EQ(1, list.priv_end);
 }
 
-TEST(HookListTest, FillUpTheList) {
+TEST(HookListUnitTest, FillUpTheList) {
   TestHookList list = INIT_HOOK_LIST(69);
   int num_inserts = 0;
   while (TestHookList_Add(&list, ++num_inserts))
     ;
-  EXPECT_EQ(kHookListMaxValues, num_inserts);
-  EXPECT_EQ(kHookListMaxValues, list.priv_end);
+  ASSERT_EQ(kHookListMaxValues, num_inserts);
+  ASSERT_EQ(kHookListMaxValues, list.priv_end);
 
   uintptr_t values[kHookListMaxValues + 1];
-  EXPECT_EQ(kHookListMaxValues, TestHookList_Traverse(list, values,
+  ASSERT_EQ(kHookListMaxValues, TestHookList_Traverse(list, values,
                                                       kHookListMaxValues));
-  EXPECT_EQ(69, values[0]);
+  ASSERT_EQ(69, values[0]);
   for (int i = 1; i < kHookListMaxValues; ++i) {
-    EXPECT_EQ(i, values[i]);
+    ASSERT_EQ(i, values[i]);
   }
 }
 
@@ -217,28 +199,28 @@ void MultithreadedTestThread(TestHookList* list, int shift,
     // non-deterministic (except for the very first one, over all threads, and
     // after the very last one the list should be empty).
     int value = (i << shift) + thread_num;
-    EXPECT_TRUE(TestHookList_Add(list, value));
+    ASSERT_TRUE(TestHookList_Add(list, value));
     sched_yield();  // Ensure some more interleaving.
     uintptr_t values[kHookListMaxValues + 1];
     int num_values = TestHookList_Traverse(*list, values, kHookListMaxValues);
-    EXPECT_LT(0, num_values);
+    ASSERT_LT(0, num_values);
     int value_index;
     for (value_index = 0;
          value_index < num_values && values[value_index] != value;
          ++value_index)
       ;
-    EXPECT_LT(value_index, num_values);  // Should have found value.
+    ASSERT_LT(value_index, num_values);  // Should have found value.
     snprintf(buf, sizeof(buf), "[%d/%d; ", value_index, num_values);
     message += buf;
     sched_yield();
-    EXPECT_TRUE(TestHookList_Remove(list, value));
+    ASSERT_TRUE(TestHookList_Remove(list, value));
     sched_yield();
     num_values = TestHookList_Traverse(*list, values, kHookListMaxValues);
     for (value_index = 0;
          value_index < num_values && values[value_index] != value;
          ++value_index)
       ;
-    EXPECT_EQ(value_index, num_values);  // Should not have found value.
+    ASSERT_EQ(value_index, num_values);  // Should not have found value.
     snprintf(buf, sizeof(buf), "%d]", num_values);
     message += buf;
     sched_yield();
@@ -275,7 +257,7 @@ void MultithreadedTestThreadRunner(int thread_num) {
 }
 
 
-TEST(HookListTest, MultithreadedTest) {
+TEST(HookListUnitTest, MultithreadedTest) {
   ASSERT_TRUE(TestHookList_Remove(&list, 69));
   ASSERT_EQ(0, list.priv_end);
 
@@ -286,8 +268,8 @@ TEST(HookListTest, MultithreadedTest) {
                        1 << 15);
 
   uintptr_t values[kHookListMaxValues + 1];
-  EXPECT_EQ(0, TestHookList_Traverse(list, values, kHookListMaxValues));
-  EXPECT_EQ(0, list.priv_end);
+  ASSERT_EQ(0, TestHookList_Traverse(list, values, kHookListMaxValues));
+  ASSERT_EQ(0, list.priv_end);
 }
 
 // We only do mmap-hooking on (some) linux systems.
@@ -327,29 +309,29 @@ int MunmapReplacement(const void* ptr, size_t size, int* result) {
   return false;
 }
 
-TEST(MallocMookTest, MmapReplacements) {
+TEST(MallocHookUnitTest, MmapReplacements) {
   mmap_calls = mmap_matching_calls = munmap_calls = munmap_matching_calls = 0;
   MallocHook::SetMmapReplacement(&MmapReplacement);
   MallocHook::SetMunmapReplacement(&MunmapReplacement);
-  EXPECT_EQ(kMmapMagicPointer, mmap(NULL, 1, PROT_READ, MAP_PRIVATE,
+  ASSERT_EQ(kMmapMagicPointer, mmap(NULL, 1, PROT_READ, MAP_PRIVATE,
                                     kMmapMagicFd, 0));
-  EXPECT_EQ(1, mmap_matching_calls);
+  ASSERT_EQ(1, mmap_matching_calls);
 
   char* ptr = reinterpret_cast<char*>(
       mmap(NULL, 1, PROT_READ | PROT_WRITE,
            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
-  EXPECT_EQ(2, mmap_calls);
-  EXPECT_EQ(1, mmap_matching_calls);
+  ASSERT_EQ(2, mmap_calls);
+  ASSERT_EQ(1, mmap_matching_calls);
   ASSERT_NE(MAP_FAILED, ptr);
   *ptr = 'a';
 
-  EXPECT_EQ(0, munmap(kMmapMagicPointer, 1));
-  EXPECT_EQ(1, munmap_calls);
-  EXPECT_EQ(1, munmap_matching_calls);
+  ASSERT_EQ(0, munmap(kMmapMagicPointer, 1));
+  ASSERT_EQ(1, munmap_calls);
+  ASSERT_EQ(1, munmap_matching_calls);
 
-  EXPECT_EQ(0, munmap(ptr, 1));
-  EXPECT_EQ(2, munmap_calls);
-  EXPECT_EQ(1, munmap_matching_calls);
+  ASSERT_EQ(0, munmap(ptr, 1));
+  ASSERT_EQ(2, munmap_calls);
+  ASSERT_EQ(1, munmap_matching_calls);
 
   // The DEATH test below is flaky, because we've just munmapped the memory,
   // making it available for mmap()ing again. There is no guarantee that it
@@ -361,7 +343,3 @@ TEST(MallocMookTest, MmapReplacements) {
 #endif  // #ifdef HAVE_MMAP && linux && ...
 
 }  // namespace
-
-int main(int argc, char** argv) {
-  return RUN_ALL_TESTS();
-}

@@ -36,11 +36,12 @@
 #include "config_for_unittests.h"
 #include <stdio.h>
 #include <sys/types.h>
-#include "base/logging.h"
 #include <gperftools/malloc_extension.h>
 #include <gperftools/malloc_extension_c.h>
 
-int main(int argc, char** argv) {
+#include "gtest/gtest.h"
+
+TEST(MallocExtensionUnitTest, MallocExtension) {
   void* a = malloc(1000);
 
   size_t cxx_bytes_used, c_bytes_used;
@@ -92,7 +93,4 @@ int main(int argc, char** argv) {
             static_cast<int>(MallocExtension_kOwned));
   ASSERT_EQ(static_cast<int>(MallocExtension::kNotOwned),
             static_cast<int>(MallocExtension_kNotOwned));
-
-  printf("DONE\n");
-  return 0;
 }

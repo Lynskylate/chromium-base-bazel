@@ -35,9 +35,10 @@
 #include <stdio.h>
 
 #include "config_for_unittests.h"
-#include "base/logging.h"
 #include <gperftools/malloc_extension.h>
 #include "tests/testutil.h"   // for RunThread()
+
+#include "gtest/gtest.h"
 
 // Helper routine to do lots of allocations
 static void TestAllocation() {
@@ -73,7 +74,7 @@ static void MultipleIdleNonIdlePhases() {
 // Get current thread cache usage
 static size_t GetTotalThreadCacheSize() {
   size_t result;
-  CHECK(MallocExtension::instance()->GetNumericProperty(
+  ASSERT_TRUE(MallocExtension::instance()->GetNumericProperty(
             "tcmalloc.current_total_thread_cache_bytes",
             &result));
   return result;
@@ -81,21 +82,24 @@ static size_t GetTotalThreadCacheSize() {
 
 // Check that MarkThreadIdle() actually reduces the amount
 // of per-thread memory.
-static void TestIdleUsage() {
-  const size_t original = GetTotalThreadCacheSize();
+TEST(MarkIdleUnitTest, IdleUsage) {
+  size_t original;
+
+  ASSERT_TRUE(MallocExtension::instance()->GetNumericProperty(
+    "tcmalloc.current_total_thread_cache_bytes", &original));
 
   TestAllocation();
   const size_t post_allocation = GetTotalThreadCacheSize();
-  CHECK_GT(post_allocation, original);
+  ASSERT_GT(post_allocation, original);
 
   MallocExtension::instance()->MarkThreadIdle();
   const size_t post_idle = GetTotalThreadCacheSize();
-  CHECK_LE(post_idle, original);
+  ASSERT_LE(post_idle, original);
 
   // Log after testing because logging can allocate heap memory.
-  VLOG(0, "Original usage: %" PRIuS "\n", original);
-  VLOG(0, "Post allocation: %" PRIuS "\n", post_allocation);
-  VLOG(0, "Post idle: %" PRIuS "\n", post_idle);
+  //VLOG(0, "Original usage: %" PRIuS "\n", original);
+  //VLOG(0, "Post allocation: %" PRIuS "\n", post_allocation);
+  //VLOG(0, "Post idle: %" PRIuS "\n", post_idle);
 }
 
 static void TestTemporarilyIdleUsage() {
@@ -103,18 +107,18 @@ static void TestTemporarilyIdleUsage() {
 
   TestAllocation();
   const size_t post_allocation = MallocExtension::instance()->GetThreadCacheSize();
-  CHECK_GT(post_allocation, original);
+  ASSERT_GT(post_allocation, original);
 
   MallocExtension::instance()->MarkThreadIdle();
   const size_t post_idle = MallocExtension::instance()->GetThreadCacheSize();
-  CHECK_EQ(post_idle, 0);
+  ASSERT_EQ(post_idle, 0);
 
   // Log after testing because logging can allocate heap memory.
-  VLOG(0, "Original usage: %" PRIuS "\n", original);
-  VLOG(0, "Post allocation: %" PRIuS "\n", post_allocation);
-  VLOG(0, "Post idle: %" PRIuS "\n", post_idle);
+  //VLOG(0, "Original usage: %" PRIuS "\n", original);
+  //VLOG(0, "Post allocation: %" PRIuS "\n", post_allocation);
+  //VLOG(0, "Post idle: %" PRIuS "\n", post_idle);
 }
-
+/*
 int main(int argc, char** argv) {
   RunThread(&TestIdleUsage);
   RunThread(&TestAllocation);
@@ -124,4 +128,4 @@ int main(int argc, char** argv) {
 
   printf("PASS\n");
   return 0;
-}
+}*/
