@@ -41,19 +41,8 @@
 # This is because libtool sometimes turns the 'executable' into a
 # shell script which runs an actual binary somewhere else.
 
-# We expect BINDIR and PPROF_PATH to be set in the environment.
-# If not, we set them to some reasonable values
-BINDIR="${BINDIR:-.}"
-PPROF_PATH="${PPROF_PATH:-$BINDIR/src/pprof}"
-
-if [ "x$1" = "x-h" -o "x$1" = "x--help" ]; then
-  echo "USAGE: $0 [unittest dir] [path to pprof]"
-  echo "       By default, unittest_dir=$BINDIR, pprof_path=$PPROF_PATH"
-  exit 1
-fi
-
-HEAP_PROFILER="${1:-$BINDIR/heap-profiler_unittest}"
-PPROF="${2:-$PPROF_PATH}"
+HEAP_PROFILER=third_party/tcmalloc/chromium/src/tests/heap_profiler_bin
+PPROF=third_party/tcmalloc/chromium/src/pprof
 TEST_TMPDIR=`mktemp -d /tmp/heap-profiler_unittest.XXXXXX`
 
 # It's meaningful to the profiler, so make sure we know its state

@@ -49,35 +49,16 @@
 #include <vector>
 #include <string>
 #include <math.h>
-#include "base/logging.h"
 #include "base/commandlineflags.h"
 #include "sampler.h"       // The Sampler class being tested
+
+#include "gtest/gtest.h"
 
 using std::sort;
 using std::min;
 using std::max;
 using std::vector;
 using std::abs;
-
-vector<void (*)()> g_testlist;  // the tests to run
-
-#define TEST(a, b)                                      \
-  struct Test_##a##_##b {                               \
-    Test_##a##_##b() { g_testlist.push_back(&Run); }    \
-    static void Run();                                  \
-  };                                                    \
-  static Test_##a##_##b g_test_##a##_##b;               \
-  void Test_##a##_##b::Run()
-
-
-static int RUN_ALL_TESTS() {
-  vector<void (*)()>::const_iterator it;
-  for (it = g_testlist.begin(); it != g_testlist.end(); ++it) {
-    (*it)();   // The test will error-exit if there's a problem.
-  }
-  fprintf(stderr, "\nPassed %d tests\n\nPASS\n", (int)g_testlist.size());
-  return 0;
-}
 
 #undef LOG   // defined in base/logging.h
 // Ideally, we'd put the newline at the end, but this hack puts the
@@ -117,12 +98,12 @@ static const size_t kSamplingInterval = 512*1024;
 
 // Tests that GetSamplePeriod returns the expected value
 // which is 1<<19
-TEST(Sampler, TestGetSamplePeriod) {
+TEST(SamplerUnitTest, TestGetSamplePeriod) {
   tcmalloc::Sampler sampler;
   sampler.Init(1);
   uint64_t sample_period;
   sample_period = sampler.GetSamplePeriod();
-  CHECK_GT(sample_period, 0);
+  ASSERT_GT(sample_period, 0);
 }
 
 // Tests of the quality of the random numbers generated
@@ -248,12 +229,12 @@ void TestNextRandom(int n) {
   double ad_pvalue = AndersonDarlingTest(n, random_sample.get());
   LOG(INFO) << StringPrintf("pvalue for AndersonDarlingTest "
                             "with n= %d is p= %f\n", n, ad_pvalue);
-  CHECK_GT(min(ad_pvalue, 1 - ad_pvalue), 0.0001);
+  ASSERT_GT(min(ad_pvalue, 1 - ad_pvalue), 0.0001);
   //           << StringPrintf("prng is not uniform, %d\n", n);
 }
 
 
-TEST(Sampler, TestNextRandom_MultipleValues) {
+TEST(SamplerUnitTest, TestNextRandom_MultipleValues) {
   TestNextRandom(10);  // Check short-range correlation
   TestNextRandom(100);
   TestNextRandom(1000);
@@ -272,11 +253,11 @@ void TestPickNextSample(int n) {
   int ones_count = 0;
   for (int i = 0; i < n; i++) {
     int_random_sample[i] = sampler.PickNextSamplingPoint();
-    CHECK_GE(int_random_sample[i], 1);
+    ASSERT_GE(int_random_sample[i], 1);
     if (int_random_sample[i] == 1) {
       ones_count += 1;
     }
-    CHECK_LT(ones_count, 4); // << " out of " << i << " samples.";
+    ASSERT_LT(ones_count, 4); // << " out of " << i << " samples.";
   }
   // First sort them...
   sort(int_random_sample.get(), int_random_sample.get() + n);
@@ -291,12 +272,12 @@ void TestPickNextSample(int n) {
   double geom_ad_pvalue = AndersonDarlingTest(n, random_sample.get());
   LOG(INFO) << StringPrintf("pvalue for geometric AndersonDarlingTest "
                              "with n= %d is p= %f\n", n, geom_ad_pvalue);
-  CHECK_GT(min(geom_ad_pvalue, 1 - geom_ad_pvalue), 0.0001);
+  ASSERT_GT(min(geom_ad_pvalue, 1 - geom_ad_pvalue), 0.0001);
       //          << "PickNextSamplingPoint does not produce good "
       //             "geometric/exponential random numbers\n";
 }
 
-TEST(Sampler, TestPickNextSample_MultipleValues) {
+TEST(SamplerUnitTest, TestPickNextSample_MultipleValues) {
   TestPickNextSample(10);  // Make sure the first few are good (enough)
   TestPickNextSample(100);
   TestPickNextSample(1000);
@@ -360,7 +341,7 @@ double StandardDeviationsErrorInSample(
   return((picked_samples - expected_samples) / sd);
 }
 
-TEST(Sampler, LargeAndSmallAllocs_CombinedTest) {
+TEST(SamplerUnitTest, LargeAndSmallAllocs_CombinedTest) {
   tcmalloc::Sampler sampler;
   sampler.Init(1);
   int counter_big = 0;
@@ -388,13 +369,13 @@ TEST(Sampler, LargeAndSmallAllocs_CombinedTest) {
                                      size_small, kSamplingInterval);
   LOG(INFO) << StringPrintf("large_allocs_sds = %f\n", large_allocs_sds);
   LOG(INFO) << StringPrintf("small_allocs_sds = %f\n", small_allocs_sds);
-  CHECK_LE(fabs(large_allocs_sds), kSigmas);
-  CHECK_LE(fabs(small_allocs_sds), kSigmas);
+  ASSERT_LE(fabs(large_allocs_sds), kSigmas);
+  ASSERT_LE(fabs(small_allocs_sds), kSigmas);
 }
 
 // Tests whether the mean is about right over 1000 samples
-TEST(Sampler, IsMeanRight) {
-  CHECK(CheckMean(kSamplingInterval, 1000));
+TEST(SamplerUnitTest, IsMeanRight) {
+  ASSERT_TRUE(CheckMean(kSamplingInterval, 1000));
 }
 
 // This flag is for the OldSampler class to use
@@ -499,7 +480,7 @@ inline bool OldSampler::SampleAllocation(size_t k) {
 
 // This checks that the stated maximum value for the
 // tcmalloc_sample_parameter flag never overflows bytes_until_sample_
-TEST(Sampler, bytes_until_sample_Overflow_Underflow) {
+TEST(SamplerUnitTest, bytes_until_sample_Overflow_Underflow) {
   tcmalloc::Sampler sampler;
   sampler.Init(1);
   uint64_t one = 1;
@@ -527,7 +508,7 @@ TEST(Sampler, bytes_until_sample_Overflow_Underflow) {
                       * (sample_parameter/(one<<24) + 1);
     LOG(INFO) << "Acceptable value is < " << cutoff;
     // This checks that the answer is "small" and positive
-    CHECK_LE(smallest_sample_step, cutoff);
+    ASSERT_LE(smallest_sample_step, cutoff);
 
     // Next, check with the smallest prng value
     uint64_t smallest_prng_value = 0;
@@ -537,15 +518,15 @@ TEST(Sampler, bytes_until_sample_Overflow_Underflow) {
         = static_cast<uint64_t>(min(log2(q) - 26, 0.0)
                                 * sample_scaling + 1);
     LOG(INFO) << "Largest sample step is " << largest_sample_step;
-    CHECK_LE(largest_sample_step, one<<63);
-    CHECK_GE(largest_sample_step, smallest_sample_step);
+    ASSERT_LE(largest_sample_step, one<<63);
+    ASSERT_GE(largest_sample_step, smallest_sample_step);
   }
 }
 
 
 // Test that NextRand is in the right range.  Unfortunately, this is a
 // stochastic test which could miss problems.
-TEST(Sampler, NextRand_range) {
+TEST(SamplerUnitTest, NextRand_range) {
   tcmalloc::Sampler sampler;
   sampler.Init(1);
   uint64_t one = 1;
@@ -556,13 +537,13 @@ TEST(Sampler, NextRand_range) {
   LOG(INFO) << "Running sampler.NextRandom 1<<" << n << " times";
   for (int i = 1; i <= (1<<n); i++) {  // 20 mimics sampler.Init()
     x = sampler.NextRandom(x);
-    CHECK_LE(x, max_value);
+    ASSERT_LE(x, max_value);
   }
 }
 
 // Tests certain arithmetic operations to make sure they compute what we
 // expect them too (for testing across different platforms)
-TEST(Sampler, arithmetic_1) {
+TEST(SamplerUnitTest, arithmetic_1) {
   tcmalloc::Sampler sampler;
   sampler.Init(1);
   uint64_t rnd;  // our 48 bit random number, which we don't trust
@@ -572,16 +553,16 @@ TEST(Sampler, arithmetic_1) {
   uint64_t max_value = (one << 48) - 1;
   for (int i = 1; i <= (1>>27); i++) {  // 20 mimics sampler.Init()
     rnd = sampler.NextRandom(rnd);
-    CHECK_LE(rnd, max_value);
+    ASSERT_LE(rnd, max_value);
     double q = (rnd >> (prng_mod_power - 26)) + 1.0;
-    CHECK_GE(q, 0); // << rnd << "  " << prng_mod_power;
+    ASSERT_GE(q, 0); // << rnd << "  " << prng_mod_power;
   }
   // Test some potentially out of bounds value for rnd
   for (int i = 1; i <= 63; i++) {
     rnd = one << i;
     double q = (rnd >> (prng_mod_power - 26)) + 1.0;
     LOG(INFO) << "rnd = " << rnd << " i=" << i << " q=" << q;
-    CHECK_GE(q, 0);
+    ASSERT_GE(q, 0);
     //        << " rnd=" << rnd << "  i=" << i << " prng_mod_power" << prng_mod_power;
   }
 }
@@ -589,16 +570,16 @@ TEST(Sampler, arithmetic_1) {
 void test_arithmetic(uint64_t rnd) {
   const uint64_t prng_mod_power = 48;  // Number of bits in prng
   uint64_t shifted_rnd = rnd >> (prng_mod_power - 26);
-  CHECK_GE(shifted_rnd, 0);
-  CHECK_LT(shifted_rnd, (1<<26));
+  ASSERT_GE(shifted_rnd, 0);
+  ASSERT_LT(shifted_rnd, (1<<26));
   LOG(INFO) << shifted_rnd;
   LOG(INFO) << static_cast<double>(shifted_rnd);
-  CHECK_GE(static_cast<double>(static_cast<uint32_t>(shifted_rnd)), 0);
+  ASSERT_GE(static_cast<double>(static_cast<uint32_t>(shifted_rnd)), 0);
       //      << " rnd=" << rnd << "  srnd=" << shifted_rnd;
-  CHECK_GE(static_cast<double>(shifted_rnd), 0);
+  ASSERT_GE(static_cast<double>(shifted_rnd), 0);
       //      << " rnd=" << rnd << "  srnd=" << shifted_rnd;
   double q = static_cast<double>(shifted_rnd) + 1.0;
-  CHECK_GT(q, 0);
+  ASSERT_GT(q, 0);
 }
 
 // Tests certain arithmetic operations to make sure they compute what we
@@ -607,14 +588,14 @@ void test_arithmetic(uint64_t rnd) {
 // rnd=227453640600554
 // shifted_rnd=54229173
 // (hard to reproduce)
-TEST(Sampler, arithmetic_2) {
+TEST(SamplerUnitTest, arithmetic_2) {
   uint64_t rnd = 227453640600554LL;
   test_arithmetic(rnd);
 }
 
 
 // It's not really a test, but it's good to know
-TEST(Sample, size_of_class) {
+TEST(SamplerUnitTest, size_of_class) {
   tcmalloc::Sampler sampler;
   sampler.Init(1);
   LOG(INFO) << "Size of Sampler class is: " << sizeof(tcmalloc::Sampler);

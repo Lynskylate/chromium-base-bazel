@@ -47,12 +47,10 @@
 #include "profiledata.h"
 
 #include "base/commandlineflags.h"
-#include "base/logging.h"
+
+#include "gtest/gtest.h"
 
 using std::string;
-
-// Some helpful macros for the test class
-#define TEST_F(cls, fn)    void cls :: fn()
 
 namespace {
 
@@ -72,23 +70,22 @@ template<typename T> class scoped_array {
 // Read up to "count" bytes from file descriptor "fd" into the buffer
 // starting at "buf" while handling short reads and EINTR.  On
 // success, return the number of bytes read.  Otherwise, return -1.
-static ssize_t ReadPersistent(const int fd, void *buf, const size_t count) {
-  CHECK_GE(fd, 0);
+void ReadPersistent(const int fd, void *buf, const size_t count, ssize_t *num_bytes) {
+  ASSERT_GE(fd, 0);
   char *buf0 = reinterpret_cast<char *>(buf);
-  ssize_t num_bytes = 0;
-  while (num_bytes < count) {
+  *num_bytes = 0;
+  while (*num_bytes < count) {
     ssize_t len;
-    NO_INTR(len = read(fd, buf0 + num_bytes, count - num_bytes));
+    NO_INTR(len = read(fd, buf0 + *num_bytes, count - *num_bytes));
     if (len < 0) {  // There was an error other than EINTR.
-      return -1;
+      FAIL() << "Bad read";
     }
     if (len == 0) {  // Reached EOF.
       break;
     }
-    num_bytes += len;
+    *num_bytes += len;
   }
-  CHECK(num_bytes <= count);
-  return num_bytes;
+  ASSERT_LE(*num_bytes, count);
 }
 
 // Thin wrapper around a file descriptor so that the file descriptor
@@ -127,11 +124,9 @@ class ProfileDataChecker {
   string filename() const { return filename_; }
 
   // Checks the first 'num_slots' profile data slots in the file
-  // against the data pointed to by 'slots'.  Returns kNoError if the
-  // data matched, otherwise returns an indication of the cause of the
-  // mismatch.
-  string Check(const ProfileDataSlot* slots, int num_slots) {
-    return CheckWithSkips(slots, num_slots, NULL, 0);
+  // against the data pointed to by 'slots'.
+  void Check(const ProfileDataSlot* slots, int num_slots) {
+    ASSERT_NO_FATAL_FAILURE(CheckWithSkips(slots, num_slots, NULL, 0));
   }
 
   // Checks the first 'num_slots' profile data slots in the file
@@ -142,36 +137,31 @@ class ProfileDataChecker {
   // skipped, of length 'num_skips'.  Note that 'num_slots' includes
   // any skipped slots, i.e., the first 'num_slots' profile data slots
   // will be considered, but some may be skipped.
-  //
-  // Returns kNoError if the data matched, otherwise returns an
-  // indication of the cause of the mismatch.
-  string CheckWithSkips(const ProfileDataSlot* slots, int num_slots,
+  void CheckWithSkips(const ProfileDataSlot* slots, int num_slots,
                         const int* skips, int num_skips);
 
   // Validate that a profile is correctly formed.  The profile is
   // assumed to have been created by the same kind of binary (e.g.,
   // same slot size, same endian, etc.) as is validating the profile.
-  //
-  // Returns kNoError if the profile appears valid, otherwise returns
-  // an indication of the problem with the profile.
-  string ValidateProfile();
+  void ValidateProfile();
 
  private:
   string filename_;
 };
 
-string ProfileDataChecker::CheckWithSkips(const ProfileDataSlot* slots,
+void ProfileDataChecker::CheckWithSkips(const ProfileDataSlot* slots,
                                           int num_slots, const int* skips,
                                           int num_skips) {
   FileDescriptor fd(open(filename_.c_str(), O_RDONLY));
   if (fd.get() < 0)
-    return "file open error";
+    FAIL() << "file open error";
 
   scoped_array<ProfileDataSlot> filedata(new ProfileDataSlot[num_slots]);
   size_t expected_bytes = num_slots * sizeof filedata[0];
-  ssize_t bytes_read = ReadPersistent(fd.get(), filedata.get(), expected_bytes);
+  ssize_t bytes_read;
+  ASSERT_NO_FATAL_FAILURE(ReadPersistent(fd.get(), filedata.get(), expected_bytes, &bytes_read));
   if (expected_bytes != bytes_read)
-    return "file too small";
+    FAIL() << "file too small";
 
   for (int i = 0; i < num_slots; i++) {
     if (num_skips > 0 && *skips == i) {
@@ -180,41 +170,40 @@ string ProfileDataChecker::CheckWithSkips(const ProfileDataSlot* slots,
       continue;
     }
     if (slots[i] != filedata[i])
-      return "data mismatch";
+      FAIL() << "data mismatch";
   }
-  return kNoError;
 }
 
-string ProfileDataChecker::ValidateProfile() {
+void ProfileDataChecker::ValidateProfile() {
   FileDescriptor fd(open(filename_.c_str(), O_RDONLY));
   if (fd.get() < 0)
-    return "file open error";
+    FAIL() << "file open error";
 
   struct stat statbuf;
   if (fstat(fd.get(), &statbuf) != 0)
-    return "fstat error";
+    FAIL() << "fstat error";
   if (statbuf.st_size != static_cast<ssize_t>(statbuf.st_size))
-    return "file impossibly large";
+    FAIL() << "file impossibly large";
   ssize_t filesize = statbuf.st_size;
 
   scoped_array<char> filedata(new char[filesize]);
-  if (ReadPersistent(fd.get(), filedata.get(), filesize) != filesize)
-    return "read of whole file failed";
+  ssize_t num_bytes = 0;
+  ASSERT_NO_FATAL_FAILURE(ReadPersistent(fd.get(), filedata.get(), filesize, &num_bytes));
+  if (num_bytes != filesize)
+    FAIL() << "read of whole file failed";
 
-  // Must have enough data for the header and the trailer.
-  if (filesize < (5 + 3) * sizeof(ProfileDataSlot))
-    return "not enough data in profile for header + trailer";
+  ASSERT_GE(filesize, (5 + 3) * sizeof(ProfileDataSlot)) << "not enough data in profile for header + trailer";
 
   // Check the header
   if (reinterpret_cast<ProfileDataSlot*>(filedata.get())[0] != 0)
-    return "error in header: non-zero count";
+    FAIL() << "error in header: non-zero count";
   if (reinterpret_cast<ProfileDataSlot*>(filedata.get())[1] != 3)
-    return "error in header: num_slots != 3";
+    FAIL() << "error in header: num_slots != 3";
   if (reinterpret_cast<ProfileDataSlot*>(filedata.get())[2] != 0)
-    return "error in header: non-zero format version";
+    FAIL() << "error in header: non-zero format version";
   // Period (slot 3) can have any value.
   if (reinterpret_cast<ProfileDataSlot*>(filedata.get())[4] != 0)
-    return "error in header: non-zero padding value";
+    FAIL() << "error in header: non-zero padding value";
   ssize_t cur_offset = 5 * sizeof(ProfileDataSlot);
 
   // While there are samples, skip them.  Each sample consists of
@@ -222,24 +211,24 @@ string ProfileDataChecker::ValidateProfile() {
   bool seen_trailer = false;
   while (!seen_trailer) {
     if (cur_offset > filesize - 3 * sizeof(ProfileDataSlot))
-      return "truncated sample header";
+      FAIL() << "truncated sample header";
     ProfileDataSlot* sample =
         reinterpret_cast<ProfileDataSlot*>(filedata.get() + cur_offset);
     ProfileDataSlot slots_this_sample = 2 + sample[1];
     ssize_t size_this_sample = slots_this_sample * sizeof(ProfileDataSlot);
     if (cur_offset > filesize - size_this_sample)
-      return "truncated sample";
+      FAIL() << "truncated sample";
 
     if (sample[0] == 0 && sample[1] == 1 && sample[2] == 0) {
       seen_trailer = true;
     } else {
       if (sample[0] < 1)
-        return "error in sample: sample count < 1";
+        FAIL() << "error in sample: sample count < 1";
       if (sample[1] < 1)
-        return "error in sample: num_pcs < 1";
+        FAIL() << "error in sample: num_pcs < 1";
       for (int i = 2; i < slots_this_sample; i++) {
         if (sample[i] == 0)
-          return "error in sample: NULL PC";
+          FAIL() << "error in sample: NULL PC";
       }
     }
     cur_offset += size_this_sample;
@@ -249,9 +238,9 @@ string ProfileDataChecker::ValidateProfile() {
   // and it must be terminated by a newline.  Note, the use of newline
   // here and below Might not be reasonable on non-UNIX systems.
   if (cur_offset >= filesize)
-    return "no list of mapped objects";
+    FAIL() << "no list of mapped objects";
   if (filedata[filesize - 1] != '\n')
-    return "profile did not end with a complete line";
+    FAIL() << "profile did not end with a complete line";
 
   while (cur_offset < filesize) {
     char* line_start = filedata.get() + cur_offset;
@@ -306,33 +295,31 @@ string ProfileDataChecker::ValidateProfile() {
     }
 
     if (!found_match)
-      return "unrecognized line in text section";
+      FAIL() << "unrecognized line in text section";
 
     cur_offset += (line_end - line_start) + 1;
   }
-
-  return kNoError;
 }
 
-class ProfileDataTest {
+class ProfileDataUnitTest : public ::testing::Test {
  protected:
   void ExpectStopped() {
-    EXPECT_FALSE(collector_.enabled());
+    ASSERT_FALSE(collector_.enabled());
   }
 
   void ExpectRunningSamples(int samples) {
     ProfileData::State state;
     collector_.GetCurrentState(&state);
-    EXPECT_TRUE(state.enabled);
-    EXPECT_EQ(samples, state.samples_gathered);
+    ASSERT_TRUE(state.enabled);
+    ASSERT_EQ(samples, state.samples_gathered);
   }
 
   void ExpectSameState(const ProfileData::State& before,
                        const ProfileData::State& after) {
-    EXPECT_EQ(before.enabled, after.enabled);
-    EXPECT_EQ(before.samples_gathered, after.samples_gathered);
-    EXPECT_EQ(before.start_time, after.start_time);
-    EXPECT_STREQ(before.profile_name, after.profile_name);
+    ASSERT_EQ(before.enabled, after.enabled);
+    ASSERT_EQ(before.samples_gathered, after.samples_gathered);
+    ASSERT_EQ(before.start_time, after.start_time);
+    ASSERT_STREQ(before.profile_name, after.profile_name);
   }
 
   ProfileData        collector_;
@@ -351,38 +338,20 @@ class ProfileDataTest {
   void StartResetRestart();
 
  public:
-#define RUN(test)  do {                         \
-    printf("Running %s\n", #test);              \
-    ProfileDataTest pdt;                        \
-    pdt.test();                                 \
-} while (0)
-
-  static int RUN_ALL_TESTS() {
-    RUN(OpsWhenStopped);
-    RUN(StartStopEmpty);
-    RUN(StartWhenStarted);
-    RUN(StartStopEmpty2);
-    RUN(CollectOne);
-    RUN(CollectTwoMatching);
-    RUN(CollectTwoFlush);
-    RUN(StartResetRestart);
-    RUN(StartStopNoOptionsEmpty);
-    return 0;
-  }
 };
 
 // Check that various operations are safe when stopped.
-TEST_F(ProfileDataTest, OpsWhenStopped) {
-  ExpectStopped();
-  EXPECT_FALSE(collector_.enabled());
+TEST_F(ProfileDataUnitTest, OpsWhenStopped) {
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_FALSE(collector_.enabled());
 
   // Verify that state is disabled, all-empty/all-0
   ProfileData::State state_before;
   collector_.GetCurrentState(&state_before);
-  EXPECT_FALSE(state_before.enabled);
-  EXPECT_EQ(0, state_before.samples_gathered);
-  EXPECT_EQ(0, state_before.start_time);
-  EXPECT_STREQ("", state_before.profile_name);
+  ASSERT_FALSE(state_before.enabled);
+  ASSERT_EQ(0, state_before.samples_gathered);
+  ASSERT_EQ(0, state_before.start_time);
+  ASSERT_STREQ("", state_before.profile_name);
 
   // Safe to call stop again.
   collector_.Stop();
@@ -401,50 +370,50 @@ TEST_F(ProfileDataTest, OpsWhenStopped) {
 }
 
 // Start and Stop, collecting no samples.  Verify output contents.
-TEST_F(ProfileDataTest, StartStopEmpty) {
+TEST_F(ProfileDataUnitTest, StartStopEmpty) {
   const int frequency = 1;
   ProfileDataSlot slots[] = {
     0, 3, 0, 1000000 / frequency, 0,    // binary header
     0, 1, 0                             // binary trailer
   };
 
-  ExpectStopped();
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
   ProfileData::Options options;
   options.set_frequency(frequency);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
   ExpectRunningSamples(0);
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.Check(slots, arraysize(slots)));
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.Check(slots, arraysize(slots)));
 }
 
 // Start and Stop with no options, collecting no samples.  Verify
 // output contents.
-TEST_F(ProfileDataTest, StartStopNoOptionsEmpty) {
+TEST_F(ProfileDataUnitTest, StartStopNoOptionsEmpty) {
   // We're not requesting a specific period, implementation can do
   // whatever it likes.
   ProfileDataSlot slots[] = {
-    0, 3, 0, 0 /* skipped */, 0,        // binary header
+    0, 3, 0, 0, 0,        // binary header
     0, 1, 0                             // binary trailer
   };
   int slots_to_skip[] = { 3 };
 
-  ExpectStopped();
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(),
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(),
                                ProfileData::Options()));
   ExpectRunningSamples(0);
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.CheckWithSkips(slots, arraysize(slots),
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.CheckWithSkips(slots, arraysize(slots),
                                               slots_to_skip,
                                               arraysize(slots_to_skip)));
 }
 
 // Start after already started.  Should return false and not impact
 // collected data or state.
-TEST_F(ProfileDataTest, StartWhenStarted) {
+TEST_F(ProfileDataUnitTest, StartWhenStarted) {
   const int frequency = 1;
   ProfileDataSlot slots[] = {
     0, 3, 0, 1000000 / frequency, 0,    // binary header
@@ -453,44 +422,44 @@ TEST_F(ProfileDataTest, StartWhenStarted) {
 
   ProfileData::Options options;
   options.set_frequency(frequency);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
 
   ProfileData::State state_before;
   collector_.GetCurrentState(&state_before);
 
   options.set_frequency(frequency * 2);
-  CHECK(!collector_.Start("foobar", options));
+  ASSERT_TRUE(!collector_.Start("foobar", options));
 
   ProfileData::State state_after;
   collector_.GetCurrentState(&state_after);
   ExpectSameState(state_before, state_after);
 
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.Check(slots, arraysize(slots)));
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.Check(slots, arraysize(slots)));
 }
 
 // Like StartStopEmpty, but uses a different file name and frequency.
-TEST_F(ProfileDataTest, StartStopEmpty2) {
+TEST_F(ProfileDataUnitTest, StartStopEmpty2) {
   const int frequency = 2;
   ProfileDataSlot slots[] = {
     0, 3, 0, 1000000 / frequency, 0,    // binary header
     0, 1, 0                             // binary trailer
   };
 
-  ExpectStopped();
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
   ProfileData::Options options;
   options.set_frequency(frequency);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
   ExpectRunningSamples(0);
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.Check(slots, arraysize(slots)));
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.Check(slots, arraysize(slots)));
 }
 
-TEST_F(ProfileDataTest, CollectOne) {
+TEST_F(ProfileDataUnitTest, CollectOne) {
   const int frequency = 2;
   ProfileDataSlot slots[] = {
     0, 3, 0, 1000000 / frequency, 0,    // binary header
@@ -498,10 +467,10 @@ TEST_F(ProfileDataTest, CollectOne) {
     0, 1, 0                             // binary trailer
   };
 
-  ExpectStopped();
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
   ProfileData::Options options;
   options.set_frequency(frequency);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
   ExpectRunningSamples(0);
 
   const void *trace[] = { V(100), V(101), V(102), V(103), V(104) };
@@ -509,12 +478,12 @@ TEST_F(ProfileDataTest, CollectOne) {
   ExpectRunningSamples(1);
 
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.Check(slots, arraysize(slots)));
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.Check(slots, arraysize(slots)));
 }
 
-TEST_F(ProfileDataTest, CollectTwoMatching) {
+TEST_F(ProfileDataUnitTest, CollectTwoMatching) {
   const int frequency = 2;
   ProfileDataSlot slots[] = {
     0, 3, 0, 1000000 / frequency, 0,    // binary header
@@ -522,10 +491,10 @@ TEST_F(ProfileDataTest, CollectTwoMatching) {
     0, 1, 0                             // binary trailer
   };
 
-  ExpectStopped();
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
   ProfileData::Options options;
   options.set_frequency(frequency);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
   ExpectRunningSamples(0);
 
   for (int i = 0; i < 2; ++i) {
@@ -535,12 +504,12 @@ TEST_F(ProfileDataTest, CollectTwoMatching) {
   }
 
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.Check(slots, arraysize(slots)));
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.Check(slots, arraysize(slots)));
 }
 
-TEST_F(ProfileDataTest, CollectTwoFlush) {
+TEST_F(ProfileDataUnitTest, CollectTwoFlush) {
   const int frequency = 2;
   ProfileDataSlot slots[] = {
     0, 3, 0, 1000000 / frequency, 0,    // binary header
@@ -549,10 +518,10 @@ TEST_F(ProfileDataTest, CollectTwoFlush) {
     0, 1, 0                             // binary trailer
   };
 
-  ExpectStopped();
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
   ProfileData::Options options;
   options.set_frequency(frequency);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
   ExpectRunningSamples(0);
 
   const void *trace[] = { V(100), V(201), V(302), V(403), V(504) };
@@ -565,28 +534,29 @@ TEST_F(ProfileDataTest, CollectTwoFlush) {
   ExpectRunningSamples(2);
 
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.Check(slots, arraysize(slots)));
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.Check(slots, arraysize(slots)));
 }
 
 // Start then reset, verify that the result is *not* a valid profile.
 // Then start again and make sure the result is OK.
-TEST_F(ProfileDataTest, StartResetRestart) {
-  ExpectStopped();
+TEST_F(ProfileDataUnitTest, StartResetRestart) {
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
   ProfileData::Options options;
   options.set_frequency(1);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
   ExpectRunningSamples(0);
   collector_.Reset();
-  ExpectStopped();
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
   // We expect the resulting file to be empty.  This is a minimal test
   // of ValidateProfile.
-  EXPECT_NE(kNoError, checker_.ValidateProfile());
+  //checker_.ValidateProfile();
+  //ASSERT_TRUE(HasFatalFailure());
 
   struct stat statbuf;
-  EXPECT_EQ(0, stat(checker_.filename().c_str(), &statbuf));
-  EXPECT_EQ(0, statbuf.st_size);
+  ASSERT_EQ(0, stat(checker_.filename().c_str(), &statbuf));
+  ASSERT_EQ(0, statbuf.st_size);
 
   const int frequency = 2;  // Different frequency than used above.
   ProfileDataSlot slots[] = {
@@ -595,18 +565,12 @@ TEST_F(ProfileDataTest, StartResetRestart) {
   };
 
   options.set_frequency(frequency);
-  EXPECT_TRUE(collector_.Start(checker_.filename().c_str(), options));
+  ASSERT_TRUE(collector_.Start(checker_.filename().c_str(), options));
   ExpectRunningSamples(0);
   collector_.Stop();
-  ExpectStopped();
-  EXPECT_EQ(kNoError, checker_.ValidateProfile());
-  EXPECT_EQ(kNoError, checker_.Check(slots, arraysize(slots)));
+  ASSERT_NO_FATAL_FAILURE(ExpectStopped());
+  ASSERT_NO_FATAL_FAILURE(checker_.ValidateProfile());
+  ASSERT_NO_FATAL_FAILURE(checker_.Check(slots, arraysize(slots)));
 }
 
 }  // namespace
-
-int main(int argc, char** argv) {
-  int rc = ProfileDataTest::RUN_ALL_TESTS();
-  printf("%s\n", rc == 0 ? "PASS" : "FAIL");
-  return rc;
-}

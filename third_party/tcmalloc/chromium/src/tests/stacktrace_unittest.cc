@@ -34,8 +34,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "base/commandlineflags.h"
-#include "base/logging.h"
 #include <gperftools/stacktrace.h>
+
+#include "gtest/gtest.h"
 
 namespace {
 
@@ -61,7 +62,7 @@ AddressRange expected_range[BACKTRACE_STEPS];
   do {                                                                   \
     (prange)->start = &&start_label;                                     \
     (prange)->end = &&end_label;                                         \
-    CHECK_LT((prange)->start, (prange)->end);                            \
+    ASSERT_LT((prange)->start, (prange)->end);                            \
   } while (0)
 // This macro expands into "unmovable" code (opaque to GCC), and that
 // prevents GCC from moving a_label up or down in the code.
@@ -77,7 +78,7 @@ AddressRange expected_range[BACKTRACE_STEPS];
 #define ADJUST_ADDRESS_RANGE_FROM_RA(prange)                             \
   do {                                                                   \
     void *ra = __builtin_return_address(0);                              \
-    CHECK_LT((prange)->start, ra);                                       \
+    ASSERT_LT((prange)->start, ra);                                       \
     if (ra > (prange)->end) {                                            \
       printf("Adjusting range from %p..%p to %p..%p\n",                  \
              (prange)->start, (prange)->end,                             \
@@ -100,8 +101,8 @@ AddressRange expected_range[BACKTRACE_STEPS];
 
 void CheckRetAddrIsInFunction(void *ret_addr, const AddressRange &range)
 {
-  CHECK_GE(ret_addr, range.start);
-  CHECK_LE(ret_addr, range.end);
+  ASSERT_GE(ret_addr, range.start);
+  ASSERT_LE(ret_addr, range.end);
 }
 
 //-----------------------------------------------------------------------//
@@ -117,8 +118,8 @@ void ATTRIBUTE_NOINLINE CheckStackTraceLeaf(void) {
   DECLARE_ADDRESS_LABEL(start);
   size = GetStackTrace(stack, STACK_LEN, 0);
   printf("Obtained %d stack frames.\n", size);
-  CHECK_GE(size, 1);
-  CHECK_LE(size, STACK_LEN);
+  ASSERT_GE(size, 1);
+  ASSERT_LE(size, STACK_LEN);
 
 #ifdef HAVE_EXECINFO_H
   {
@@ -157,7 +158,7 @@ void ATTRIBUTE_NOINLINE CheckStackTrace3(int i) {
   INIT_ADDRESS_RANGE(CheckStackTrace3, start, end, &expected_range[2]);
   DECLARE_ADDRESS_LABEL(start);
   for (int j = i; j >= 0; j--)
-    CheckStackTrace4(j);
+    ASSERT_NO_FATAL_FAILURE(CheckStackTrace4(j));
   DECLARE_ADDRESS_LABEL(end);
 }
 void ATTRIBUTE_NOINLINE CheckStackTrace2(int i) {
@@ -165,7 +166,7 @@ void ATTRIBUTE_NOINLINE CheckStackTrace2(int i) {
   INIT_ADDRESS_RANGE(CheckStackTrace2, start, end, &expected_range[3]);
   DECLARE_ADDRESS_LABEL(start);
   for (int j = i; j >= 0; j--)
-    CheckStackTrace3(j);
+    ASSERT_NO_FATAL_FAILURE(CheckStackTrace3(j));
   DECLARE_ADDRESS_LABEL(end);
 }
 void ATTRIBUTE_NOINLINE CheckStackTrace1(int i) {
@@ -173,22 +174,20 @@ void ATTRIBUTE_NOINLINE CheckStackTrace1(int i) {
   INIT_ADDRESS_RANGE(CheckStackTrace1, start, end, &expected_range[4]);
   DECLARE_ADDRESS_LABEL(start);
   for (int j = i; j >= 0; j--)
-    CheckStackTrace2(j);
+    ASSERT_NO_FATAL_FAILURE(CheckStackTrace2(j));
   DECLARE_ADDRESS_LABEL(end);
 }
 void ATTRIBUTE_NOINLINE CheckStackTrace(int i) {
   INIT_ADDRESS_RANGE(CheckStackTrace, start, end, &expected_range[5]);
   DECLARE_ADDRESS_LABEL(start);
   for (int j = i; j >= 0; j--)
-    CheckStackTrace1(j);
+    ASSERT_NO_FATAL_FAILURE(CheckStackTrace1(j));
   DECLARE_ADDRESS_LABEL(end);
 }
 
 }  // namespace
 //-----------------------------------------------------------------------//
 
-int main(int argc, char ** argv) {
-  CheckStackTrace(0);
-  printf("PASS\n");
-  return 0;
+TEST(StackTraceUnitTest, StackTrace) {
+  ASSERT_NO_FATAL_FAILURE(CheckStackTrace(0));
 }

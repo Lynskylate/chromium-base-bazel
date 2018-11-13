@@ -51,6 +51,8 @@
 #include <google/stacktrace.h>
 #include <google/tcmalloc.h>
 
+#include "gtest/gtest.h"
+
 // We don't link in -lprofiler for this test, so be sure not to make
 // any function calls that require the cpu-profiler code.  The
 // heap-profiler is ok.
@@ -65,7 +67,5 @@ ProfilerOptions* profiler_h;
 int (*stacktrace_h)(void**, int, int) = &GetStackTrace;
 void* (*tcmalloc_h)(size_t) = &tc_new;
 
-int main(int argc, char** argv) {
-  printf("PASS\n");
-  return 0;
+TEST(SimpleCompatUnitTest, SanityCheck) {
 }

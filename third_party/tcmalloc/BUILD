@@ -54,3 +54,13 @@ cc_library(
         "//third_party/dynamic_annotations",
     ],
 )
+
+sh_library(
+    name = "pprof",
+    testonly = True,
+    srcs = [
+        "chromium/src/pprof",
+    ],
+    licenses = ["permissive"],
+    visibility = ["//third_party/tcmalloc/chromium/src/tests:__pkg__"],
+)

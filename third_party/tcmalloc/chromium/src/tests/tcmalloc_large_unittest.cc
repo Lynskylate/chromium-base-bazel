@@ -41,7 +41,7 @@
 #include <stdio.h>
 #include <set>                          // for set, etc
 
-#include "base/logging.h"               // for operator<<, CHECK, etc
+#include "gtest/gtest.h"
 
 using std::set;
 
@@ -49,13 +49,13 @@ using std::set;
 
 void TryAllocExpectFail(size_t size) {
   void* p1 = malloc(size);
-  CHECK(p1 == NULL);
+  ASSERT_EQ(p1, nullptr);
 
   void* p2 = malloc(1);
-  CHECK(p2 != NULL);
+  ASSERT_NE(p2, nullptr);
 
   void* p3 = realloc(p2, size);
-  CHECK(p3 == NULL);
+  ASSERT_EQ(p3, nullptr);
 
   free(p2);
 }
@@ -74,17 +74,17 @@ void TryAllocMightFail(size_t size) {
     }
 
     for ( size_t i = 0; i < kPoints; ++i ) {
-      CHECK(vp[i * (size / kPoints)] == static_cast<unsigned char>(i));
+      ASSERT_TRUE(vp[i * (size / kPoints)] == static_cast<unsigned char>(i));
     }
 
     vp[size-1] = 'M';
-    CHECK(vp[size-1] == 'M');
+    ASSERT_TRUE(vp[size-1] == 'M');
   }
 
   free(p);
 }
 
-int main (int argc, char** argv) {
+TEST(TcMallocLargeUnitTest, LargeMallocTest) {
   // Allocate some 0-byte objects.  They better be unique.
   // 0 bytes is not large but it exercises some paths related to
   // large-allocation code.
@@ -94,8 +94,8 @@ int main (int argc, char** argv) {
     set<char*> p_set;
     for ( int i = 0; i < kZeroTimes; ++i ) {
       char* p = new char;
-      CHECK(p != NULL);
-      CHECK(p_set.find(p) == p_set.end());
+      ASSERT_NE(p, nullptr);
+      ASSERT_TRUE(p_set.find(p) == p_set.end());
       p_set.insert(p_set.end(), p);
     }
     // Just leak the memory.
@@ -104,7 +104,7 @@ int main (int argc, char** argv) {
   // Grab some memory so that some later allocations are guaranteed to fail.
   printf("Test small malloc\n");
   void* p_small = malloc(4*1048576);
-  CHECK(p_small != NULL);
+  ASSERT_NE(p_small, nullptr);
 
   // Test sizes up near the maximum size_t.
   // These allocations test the wrap-around code.
@@ -112,7 +112,7 @@ int main (int argc, char** argv) {
   const size_t zero = 0;
   static const size_t kMinusNTimes = 16384;
   for ( size_t i = 1; i < kMinusNTimes; ++i ) {
-    TryAllocExpectFail(zero - i);
+    ASSERT_NO_FATAL_FAILURE(TryAllocExpectFail(zero - i));
   }
 
   // Test sizes a bit smaller.
@@ -120,7 +120,7 @@ int main (int argc, char** argv) {
   printf("Test malloc(0 - 1048576 - N)\n");
   static const size_t kMinusMBMinusNTimes = 16384;
   for ( size_t i = 0; i < kMinusMBMinusNTimes; ++i) {
-    TryAllocExpectFail(zero - 1048576 - i);
+    ASSERT_NO_FATAL_FAILURE(TryAllocExpectFail(zero - 1048576 - i));
   }
 
   // Test sizes at half of size_t.
@@ -129,10 +129,7 @@ int main (int argc, char** argv) {
   static const size_t kHalfPlusMinusTimes = 64;
   const size_t half = (zero - 2) / 2 + 1;
   for ( size_t i = 0; i < kHalfPlusMinusTimes; ++i) {
-    TryAllocMightFail(half - i);
-    TryAllocMightFail(half + i);
+    ASSERT_NO_FATAL_FAILURE(TryAllocMightFail(half - i));
+    ASSERT_NO_FATAL_FAILURE(TryAllocMightFail(half + i));
   }
-
-  printf("PASS\n");
-  return 0;
 }

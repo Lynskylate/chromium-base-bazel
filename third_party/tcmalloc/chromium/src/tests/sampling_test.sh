@@ -36,17 +36,8 @@
 # correctly: both for the heap profile (ReadStackTraces) and for
 # growth in the heap sized (ReadGrowthStackTraces).
 
-BINDIR="${BINDIR:-.}"
-PPROF_PATH="${PPROF_PATH:-$BINDIR/src/pprof}"
-
-if [ "x$1" = "x-h" -o "x$1" = "x--help" ]; then
-  echo "USAGE: $0 [unittest dir] [path to pprof]"
-  echo "       By default, unittest_dir=$BINDIR, pprof_path=$PPROF_PATH"
-  exit 1
-fi
-
-SAMPLING_TEST="${1:-$BINDIR/sampling_test}"
-PPROF="${2:-$PPROF_PATH}"
+SAMPLING_TEST=third_party/tcmalloc/chromium/src/tests/sampling_test_bin
+PPROF=third_party/tcmalloc/chromium/src/pprof
 OUTDIR="/tmp/sampling_test_dir"
 
 # libtool is annoying, and puts the actual executable in a different

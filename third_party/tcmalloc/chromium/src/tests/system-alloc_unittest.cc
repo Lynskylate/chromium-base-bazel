@@ -42,9 +42,10 @@
 #include <sys/types.h>
 #include <algorithm>
 #include <limits>
-#include "base/logging.h"               // for Check_GEImpl, Check_LTImpl, etc
 #include <gperftools/malloc_extension.h>    // for MallocExtension::instance
 #include "common.h"                     // for kAddressBits
+
+#include "gtest/gtest.h"
 
 class ArraySysAllocator : public SysAllocator {
 public:
@@ -73,7 +74,9 @@ public:
     // Try to get more memory for alignment
     size_t extra = alignment - (ptr & (alignment-1));
     size += extra;
-    CHECK_LT(ptr_ + size, kArraySize);
+    if(ptr_ + size >= kArraySize) {
+      exit(1);
+    }
 
     if ((ptr & (alignment-1)) != 0) {
       ptr += alignment - (ptr & (alignment-1));
@@ -96,7 +99,7 @@ private:
 const int ArraySysAllocator::kArraySize;
 ArraySysAllocator a;
 
-static void TestBasicInvoked() {
+TEST(SystemAllocUnitTest, BasicInvoked) {
   MallocExtension::instance()->SetSystemAllocator(&a);
 
   // An allocation size that is likely to trigger the system allocator.
@@ -105,7 +108,7 @@ static void TestBasicInvoked() {
   delete [] p;
 
   // Make sure that our allocator was invoked.
-  CHECK(a.invoked_);
+  ASSERT_TRUE(a.invoked_);
 }
 
 #if 0  // could port this to various OSs, but won't bother for now
@@ -116,11 +119,11 @@ TEST(AddressBits, CpuVirtualBits) {
   const int kPointerBits = 8 * sizeof(void*);
   const int kImplementedVirtualBits = NumImplementedVirtualBits();
 
-  CHECK_GE(kAddressBits, std::min(kImplementedVirtualBits, kPointerBits));
+  ASSERT_GE(kAddressBits, std::min(kImplementedVirtualBits, kPointerBits));
 }
 #endif
 
-static void TestBasicRetryFailTest() {
+TEST(SystemAllocUnitTest, BasicRetryFail) {
   // Check with the allocator still works after a failed allocation.
   //
   // There is no way to call malloc and guarantee it will fail.  malloc takes a
@@ -138,18 +141,10 @@ static void TestBasicRetryFailTest() {
   const size_t kHugeSize = (std::numeric_limits<size_t>::max)() / 2;
   void* p1 = malloc(kHugeSize);
   void* p2 = malloc(kHugeSize);
-  CHECK(p2 == NULL);
+  ASSERT_TRUE(p2 == NULL);
   if (p1 != NULL) free(p1);
 
   char* q = new char[1024];
-  CHECK(q != NULL);
+  ASSERT_TRUE(q != NULL);
   delete [] q;
-}
-
-int main(int argc, char** argv) {
-  TestBasicInvoked();
-  TestBasicRetryFailTest();
-
-  printf("PASS\n");
-  return 0;
 }

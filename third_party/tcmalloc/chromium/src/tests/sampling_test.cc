@@ -42,9 +42,13 @@
 #include <stdlib.h>
 #include <string>
 #include "base/logging.h"
+#include "sampler.h"       // The Sampler class being tested
 #include <gperftools/malloc_extension.h>
 
 using std::string;
+
+// Make sure sampling is enabled, or the tests won't work right.
+DECLARE_int64(tcmalloc_sample_parameter);
 
 extern "C" void* AllocateAllocate() ATTRIBUTE_NOINLINE;
 
@@ -63,6 +67,9 @@ static void WriteStringToFile(const string& s, const string& filename) {
 }
 
 int main(int argc, char** argv) {
+  if (FLAGS_tcmalloc_sample_parameter == 0)
+    FLAGS_tcmalloc_sample_parameter = 524288;
+
   if (argc < 2) {
     fprintf(stderr, "USAGE: %s <base of output files>\n", argv[0]);
     exit(1);
