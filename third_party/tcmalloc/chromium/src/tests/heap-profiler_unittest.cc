@@ -116,7 +116,7 @@ static void TestDumpHeapProfiler() {
     Deallocate(0, 40);
 
     char* output = GetHeapProfile();
-    free(output);
+    tc_free(output);
     HeapProfilerStop();
   }
 }

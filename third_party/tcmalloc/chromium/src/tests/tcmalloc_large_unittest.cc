@@ -41,6 +41,8 @@
 #include <stdio.h>
 #include <set>                          // for set, etc
 
+#include "testutil.h"
+
 #include "gtest/gtest.h"
 
 using std::set;
@@ -48,16 +50,16 @@ using std::set;
 // Alloc a size that should always fail.
 
 void TryAllocExpectFail(size_t size) {
-  void* p1 = malloc(size);
+  void* p1 = tc_malloc(size);
   ASSERT_EQ(p1, nullptr);
 
-  void* p2 = malloc(1);
+  void* p2 = tc_malloc(1);
   ASSERT_NE(p2, nullptr);
 
-  void* p3 = realloc(p2, size);
+  void* p3 = tc_realloc(p2, size);
   ASSERT_EQ(p3, nullptr);
 
-  free(p2);
+  tc_free(p2);
 }
 
 // Alloc a size that might work and might fail.
@@ -81,7 +83,7 @@ void TryAllocMightFail(size_t size) {
     ASSERT_TRUE(vp[size-1] == 'M');
   }
 
-  free(p);
+  tc_free(p);
 }
 
 TEST(TcMallocLargeUnitTest, LargeMallocTest) {
@@ -90,7 +92,7 @@ TEST(TcMallocLargeUnitTest, LargeMallocTest) {
   // large-allocation code.
   {
     static const int kZeroTimes = 1024;
-    printf("Test malloc(0) x %d\n", kZeroTimes);
+    printf("Test tc_malloc(0) x %d\n", kZeroTimes);
     set<char*> p_set;
     for ( int i = 0; i < kZeroTimes; ++i ) {
       char* p = new char;
@@ -103,12 +105,12 @@ TEST(TcMallocLargeUnitTest, LargeMallocTest) {
 
   // Grab some memory so that some later allocations are guaranteed to fail.
   printf("Test small malloc\n");
-  void* p_small = malloc(4*1048576);
+  void* p_small = tc_malloc(4*1048576);
   ASSERT_NE(p_small, nullptr);
 
   // Test sizes up near the maximum size_t.
   // These allocations test the wrap-around code.
-  printf("Test malloc(0 - N)\n");
+  printf("Test tc_malloc(0 - N)\n");
   const size_t zero = 0;
   static const size_t kMinusNTimes = 16384;
   for ( size_t i = 1; i < kMinusNTimes; ++i ) {
@@ -117,7 +119,7 @@ TEST(TcMallocLargeUnitTest, LargeMallocTest) {
 
   // Test sizes a bit smaller.
   // The small malloc above guarantees that all these return NULL.
-  printf("Test malloc(0 - 1048576 - N)\n");
+  printf("Test tc_malloc(0 - 1048576 - N)\n");
   static const size_t kMinusMBMinusNTimes = 16384;
   for ( size_t i = 0; i < kMinusMBMinusNTimes; ++i) {
     ASSERT_NO_FATAL_FAILURE(TryAllocExpectFail(zero - 1048576 - i));
@@ -125,7 +127,7 @@ TEST(TcMallocLargeUnitTest, LargeMallocTest) {
 
   // Test sizes at half of size_t.
   // These might or might not fail to allocate.
-  printf("Test malloc(max/2 +- N)\n");
+  printf("Test tc_malloc(max/2 +- N)\n");
   static const size_t kHalfPlusMinusTimes = 64;
   const size_t half = (zero - 2) / 2 + 1;
   for ( size_t i = 0; i < kHalfPlusMinusTimes; ++i) {

@@ -246,7 +246,7 @@ void* operator new(size_t size, const Initialized&) {
   // Below we use "p = new(initialized) Foo[1];" and  "delete[] p;"
   // instead of "p = new(initialized) Foo;"
   // when we need to delete an allocated object.
-  void* p = malloc(size);
+  void* p = tc_malloc(size);
   memset(p, 0, size);
   return p;
 }
@@ -1076,11 +1076,11 @@ REGISTER_OBJ_MAKER(linking_ptr,
 )
 
 // small objects:
-REGISTER_OBJ_MAKER(0_sized, void* p = malloc(0);)  // 0-sized object (important)
-REGISTER_OBJ_MAKER(1_sized, void* p = malloc(1);)
-REGISTER_OBJ_MAKER(2_sized, void* p = malloc(2);)
-REGISTER_OBJ_MAKER(3_sized, void* p = malloc(3);)
-REGISTER_OBJ_MAKER(4_sized, void* p = malloc(4);)
+REGISTER_OBJ_MAKER(0_sized, void* p = tc_malloc(0);)  // 0-sized object (important)
+REGISTER_OBJ_MAKER(1_sized, void* p = tc_malloc(1);)
+REGISTER_OBJ_MAKER(2_sized, void* p = tc_malloc(2);)
+REGISTER_OBJ_MAKER(3_sized, void* p = tc_malloc(3);)
+REGISTER_OBJ_MAKER(4_sized, void* p = tc_malloc(4);)
 
 static int set_data[] = { 1, 2, 3, 4, 5, 6, 7, 21, 22, 23, 24, 25, 26, 27 };
 static set<int> live_leak_set(set_data, set_data+7);
@@ -1329,7 +1329,7 @@ static void VerifyMemoryRegionMapStackGet() {
 }
 
 static void* Mallocer(uintptr_t* addr_after_malloc_call) {
-  void* r = malloc(100);
+  void* r = tc_malloc(100);
   sleep(0);  // undo -foptimize-sibling-calls
   // Get current PC value into addr_after_malloc_call
   void* stack[1];
@@ -1358,7 +1358,7 @@ extern void VerifyHeapProfileTableStackGet() {
          << "! Stack frame collection must be off in heap profiler!";
     LOG(FATAL, "\n");
   }
-  free(addr);
+  tc_free(addr);
 }
 
 // ========================================================================= //

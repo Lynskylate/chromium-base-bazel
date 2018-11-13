@@ -36,6 +36,7 @@
 #include <stdio.h>
 
 #include "common.h"
+#include "testutil.h"
 #include <gperftools/malloc_extension.h>
 
 #include "gtest/gtest.h"
@@ -44,8 +45,8 @@ TEST(LargeHeapFragmentationUnitTest, LargeHeapFragmentation) {
   for (int pass = 1; pass <= 3; pass++) {
     size_t size = 100*1024*1024;
     while (size < 500*1024*1024) {
-      void *ptr = malloc(size);
-      free(ptr);
+      void *ptr = tc_malloc(size);
+      tc_free(ptr);
       size += 20000;
 
       size_t heap_size = static_cast<size_t>(-1);

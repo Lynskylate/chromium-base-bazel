@@ -95,7 +95,7 @@ TEST(DebugAllocationTest, DeallocMismatch) {
     IF_DEBUG_EXPECT_DEATH(delete x, "mismatch.*being dealloc.*delete");
     IF_DEBUG_EXPECT_DEATH(delete [] x, "mismatch.*being dealloc.*delete *[[]");
     // Should work fine.
-    free(x);
+    tc_free(x);
   }
 
   // Allocate with new.
@@ -244,7 +244,7 @@ TEST(DebugAllocationTest, CurrentlyAllocated) {
   FLAGS_max_free_queue_size = 0;
   // Force a round-trip through the queue management code so that the
   // new size is seen and the queue of recently-freed blocks is flushed.
-  free(malloc(1));
+  tc_free(malloc(1));
   FLAGS_max_free_queue_size = 1048576;
 #endif
 
@@ -263,17 +263,17 @@ TEST(DebugAllocationTest, GetAllocatedSizeTest) {
   // exactly requested size, since debug_allocation doesn't allow users
   // to write more than that.
   for (int i = 0; i < 10; ++i) {
-    void *p = malloc(i);
+    void *p = tc_malloc(i);
     EXPECT_EQ(i, MallocExtension::instance()->GetAllocatedSize(p));
-    free(p);
+    tc_free(p);
   }
 #endif
-  void* a = malloc(1000);
+  void* a = tc_malloc(1000);
   EXPECT_GE(MallocExtension::instance()->GetAllocatedSize(a), 1000);
   // This is just a sanity check.  If we allocated too much, alloc is broken
   EXPECT_LE(MallocExtension::instance()->GetAllocatedSize(a), 5000);
   EXPECT_GE(MallocExtension::instance()->GetEstimatedAllocatedSize(1000), 1000);
-  free(a);
+  tc_free(a);
 }
 
 TEST(DebugAllocationTest, HugeAlloc) {
@@ -285,7 +285,7 @@ TEST(DebugAllocationTest, HugeAlloc) {
 
 #ifndef NDEBUG
 
-  a = malloc(kTooBig);
+  a = tc_malloc(kTooBig);
   EXPECT_EQ(NULL, a);
 
   // kAlsoTooBig is small enough not to get caught by debugallocation's check,
@@ -293,7 +293,7 @@ TEST(DebugAllocationTest, HugeAlloc) {
   // a non-const variable. See kTooBig for more details.
   size_t kAlsoTooBig = kTooBig - 1024;
 
-  a = malloc(kAlsoTooBig);
+  a = tc_malloc(kAlsoTooBig);
   EXPECT_EQ(NULL, a);
 #endif
 }
@@ -307,7 +307,7 @@ TEST(DebugAllocationTest, ReallocAfterMemalign) {
   EXPECT_NE(p, NULL);
   memcpy(stuff, p, sizeof(stuff));
 
-  p = realloc(p, sizeof(stuff) + 10);
+  p = tc_realloc(p, sizeof(stuff) + 10);
   EXPECT_NE(p, NULL);
 
   int rv = memcmp(stuff, p, sizeof(stuff));

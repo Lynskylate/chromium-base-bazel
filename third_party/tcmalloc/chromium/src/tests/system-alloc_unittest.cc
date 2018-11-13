@@ -44,6 +44,7 @@
 #include <limits>
 #include <gperftools/malloc_extension.h>    // for MallocExtension::instance
 #include "common.h"                     // for kAddressBits
+#include "testutil.h"
 
 #include "gtest/gtest.h"
 
@@ -139,10 +140,10 @@ TEST(SystemAllocUnitTest, BasicRetryFail) {
   // disable this test.
   // The weird parens are to avoid macro-expansion of 'max' on windows.
   const size_t kHugeSize = (std::numeric_limits<size_t>::max)() / 2;
-  void* p1 = malloc(kHugeSize);
-  void* p2 = malloc(kHugeSize);
+  void* p1 = tc_malloc(kHugeSize);
+  void* p2 = tc_malloc(kHugeSize);
   ASSERT_TRUE(p2 == NULL);
-  if (p1 != NULL) free(p1);
+  if (p1 != NULL) tc_free(p1);
 
   char* q = new char[1024];
   ASSERT_TRUE(q != NULL);

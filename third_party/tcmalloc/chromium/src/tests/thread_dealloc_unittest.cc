@@ -53,10 +53,10 @@ static const int kNumThreads = 1000;
 static void AllocStuff() {
   void** objects = new void*[kNumObjects];
   for (int i = 0; i < kNumObjects; i++) {
-    objects[i] = malloc(kObjectSize);
+    objects[i] = tc_malloc(kObjectSize);
   }
   for (int i = 0; i < kNumObjects; i++) {
-    free(objects[i]);
+    tc_free(objects[i]);
   }
   delete[] objects;
 }

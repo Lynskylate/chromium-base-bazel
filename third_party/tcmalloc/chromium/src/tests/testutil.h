@@ -34,6 +34,15 @@
 #ifndef TCMALLOC_TOOLS_TESTUTIL_H_
 #define TCMALLOC_TOOLS_TESTUTIL_H_
 
+#include <gperftools/tcmalloc.h>
+#include <cstddef>
+
+// override the c++ allocators
+
+void* operator new(std::size_t sz);
+
+void operator delete(void* ptr) noexcept;
+
 // Run a function in a thread of its own and wait for it to finish.
 // The function you pass in must have the signature
 //    void MyFunction();

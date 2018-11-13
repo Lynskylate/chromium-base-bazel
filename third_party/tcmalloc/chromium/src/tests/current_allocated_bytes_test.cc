@@ -55,7 +55,7 @@ TEST(CurrentAllocatedBytesUnitTest, CurrentAllocatedBytes) {
 
   size_t before_bytes, after_bytes;
   MallocExtension::instance()->GetNumericProperty(kCurrent, &before_bytes);
-  free(malloc(200));
+  tc_free(malloc(200));
   MallocExtension::instance()->GetNumericProperty(kCurrent, &after_bytes);
 
   ASSERT_EQ(before_bytes, after_bytes);

@@ -38,11 +38,12 @@
 #include <sys/types.h>
 #include <gperftools/malloc_extension.h>
 #include <gperftools/malloc_extension_c.h>
+#include "testutil.h"
 
 #include "gtest/gtest.h"
 
 TEST(MallocExtensionUnitTest, MallocExtension) {
-  void* a = malloc(1000);
+  void* a = tc_malloc(1000);
 
   size_t cxx_bytes_used, c_bytes_used;
   ASSERT_TRUE(MallocExtension::instance()->GetNumericProperty(
@@ -69,10 +70,10 @@ TEST(MallocExtensionUnitTest, MallocExtension) {
   ASSERT_GE(MallocExtension::instance()->GetEstimatedAllocatedSize(1000), 1000);
 
   for (int i = 0; i < 10; ++i) {
-    void *p = malloc(i);
+    void *p = tc_malloc(i);
     ASSERT_GE(MallocExtension::instance()->GetAllocatedSize(p),
              MallocExtension::instance()->GetEstimatedAllocatedSize(i));
-    free(p);
+    tc_free(p);
   }
 
   // Check the c-shim version too.
@@ -84,7 +85,7 @@ TEST(MallocExtensionUnitTest, MallocExtension) {
   ASSERT_LE(MallocExtension_GetAllocatedSize(a), 5000);
   ASSERT_GE(MallocExtension_GetEstimatedAllocatedSize(1000), 1000);
 
-  free(a);
+  tc_free(a);
 
   // Verify that the .cc file and .h file have the same enum values.
   ASSERT_EQ(static_cast<int>(MallocExtension::kUnknownOwnership),

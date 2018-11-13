@@ -36,7 +36,7 @@
 // Checks basic properties of the sampler
 
 #include "config_for_unittests.h"
-#include <stdlib.h>        // defines posix_memalign
+#include <stdlib.h>        // defines tc_posix_memalign
 #include <stdio.h>         // for the printf at the end
 #if defined HAVE_STDINT_H
 #include <stdint.h>             // to get uintptr_t
@@ -50,6 +50,7 @@
 #include <string>
 #include <math.h>
 #include "base/commandlineflags.h"
+#include "testutil.h"
 #include "sampler.h"       // The Sampler class being tested
 
 #include "gtest/gtest.h"

@@ -40,18 +40,18 @@
 #include "config_for_unittests.h"
 
 // Complicated ordering requirements.  tcmalloc.h defines (indirectly)
-// _POSIX_C_SOURCE, which it needs so stdlib.h defines posix_memalign.
+// _POSIX_C_SOURCE, which it needs so stdlib.h defines tc_posix_memalign.
 // unistd.h, on the other hand, requires _POSIX_C_SOURCE to be unset,
 // at least on Mac OS X, in order to define getpagesize.  The solution
 // is to #include unistd.h first.  This is safe because unistd.h
-// doesn't sub-include stdlib.h, so we'll still get posix_memalign
+// doesn't sub-include stdlib.h, so we'll still get tc_posix_memalign
 // when we #include stdlib.h.  Blah.
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>        // for getpagesize()
 #endif
-#include "tcmalloc.h"      // must come early, to pick up posix_memalign
+#include "tcmalloc.h"      // must come early, to pick up tc_posix_memalign
 #include <assert.h>
-#include <stdlib.h>        // defines posix_memalign
+#include <stdlib.h>        // defines tc_posix_memalign
 #include <stdio.h>         // for the printf at the end
 #ifdef HAVE_STDINT_H
 #include <stdint.h>        // for uintptr_t
@@ -61,7 +61,7 @@
 #endif
 // Malloc can be in several places on older versions of OS X.
 #if defined(HAVE_MALLOC_H)
-#include <malloc.h>        // for memalign() and valloc()
+#include <malloc.h>        // for tc_memalign() and tc_valloc()
 #elif defined(HAVE_MALLOC_MALLOC_H)
 #include <malloc/malloc.h>
 #elif defined(HAVE_SYS_MALLOC_H)
@@ -134,27 +134,27 @@ TEST(MemAlignUnitTest, MemAlign) {
   // Try allocating data with a bunch of alignments and sizes
   for (int a = 1; a < 1048576; a *= 2) {
     for (int s = 0; s != -1; s = NextSize(s)) {
-      void* ptr = memalign(a, s);
+      void* ptr = tc_memalign(a, s);
       ASSERT_NO_FATAL_FAILURE(CheckAlignment(ptr, a));
       Fill(ptr, s, 'x');
       ASSERT_TRUE(Valid(ptr, s, 'x'));
-      free(ptr);
+      tc_free(ptr);
 
       if ((a >= sizeof(void*)) && ((a & (a-1)) == 0)) {
-        ASSERT_EQ(posix_memalign(&ptr, a, s), 0);
+        ASSERT_EQ(tc_posix_memalign(&ptr, a, s), 0);
         ASSERT_NO_FATAL_FAILURE(CheckAlignment(ptr, a));
         Fill(ptr, s, 'y');
         ASSERT_TRUE(Valid(ptr, s, 'y'));
-        free(ptr);
+        tc_free(ptr);
       }
     }
   }
 
   {
     // Check various corner cases
-    void* p1 = memalign(1<<20, 1<<19);
-    void* p2 = memalign(1<<19, 1<<19);
-    void* p3 = memalign(1<<21, 1<<19);
+    void* p1 = tc_memalign(1<<20, 1<<19);
+    void* p2 = tc_memalign(1<<19, 1<<19);
+    void* p3 = tc_memalign(1<<21, 1<<19);
     ASSERT_NO_FATAL_FAILURE(CheckAlignment(p1, 1<<20));
     ASSERT_NO_FATAL_FAILURE(CheckAlignment(p2, 1<<19));
     ASSERT_NO_FATAL_FAILURE(CheckAlignment(p3, 1<<21));
@@ -164,55 +164,55 @@ TEST(MemAlignUnitTest, MemAlign) {
     ASSERT_TRUE(Valid(p1, 1<<19, 'a'));
     ASSERT_TRUE(Valid(p2, 1<<19, 'b'));
     ASSERT_TRUE(Valid(p3, 1<<19, 'c'));
-    free(p1);
-    free(p2);
-    free(p3);
+    tc_free(p1);
+    tc_free(p2);
+    tc_free(p3);
   }
 
   {
-    // posix_memalign
+    // tc_posix_memalign
     void* ptr;
-    ASSERT_EQ(posix_memalign(&ptr, 0, 1), EINVAL);
-    ASSERT_EQ(posix_memalign(&ptr, sizeof(void*)/2, 1), EINVAL);
-    ASSERT_EQ(posix_memalign(&ptr, sizeof(void*)+1, 1), EINVAL);
-    ASSERT_EQ(posix_memalign(&ptr, 4097, 1), EINVAL);
+    ASSERT_EQ(tc_posix_memalign(&ptr, 0, 1), EINVAL);
+    ASSERT_EQ(tc_posix_memalign(&ptr, sizeof(void*)/2, 1), EINVAL);
+    ASSERT_EQ(tc_posix_memalign(&ptr, sizeof(void*)+1, 1), EINVAL);
+    ASSERT_EQ(tc_posix_memalign(&ptr, 4097, 1), EINVAL);
 
     // Grab some memory so that the big allocation below will definitely fail.
-    void* p_small = malloc(4*1048576);
+    void* p_small = tc_malloc(4*1048576);
     ASSERT_NE(p_small, nullptr);
 
     // Make sure overflow is returned as ENOMEM
     const size_t zero = 0;
     static const size_t kMinusNTimes = 10;
     for ( size_t i = 1; i < kMinusNTimes; ++i ) {
-      int r = posix_memalign(&ptr, 1024, zero - i);
+      int r = tc_posix_memalign(&ptr, 1024, zero - i);
       ASSERT_EQ(r, ENOMEM);
     }
 
-    free(p_small);
+    tc_free(p_small);
   }
 
   const int pagesize = getpagesize();
   {
     // valloc
     for (int s = 0; s != -1; s = NextSize(s)) {
-      void* p = valloc(s);
+      void* p = tc_valloc(s);
       ASSERT_NO_FATAL_FAILURE(CheckAlignment(p, pagesize));
       Fill(p, s, 'v');
       ASSERT_TRUE(Valid(p, s, 'v'));
-      free(p);
+      tc_free(p);
     }
   }
 
   {
     // pvalloc
     for (int s = 0; s != -1; s = NextSize(s)) {
-      void* p = pvalloc(s);
+      void* p = tc_pvalloc(s);
       ASSERT_NO_FATAL_FAILURE(CheckAlignment(p, pagesize));
       int alloc_needed = ((s + pagesize - 1) / pagesize) * pagesize;
       Fill(p, alloc_needed, 'x');
       ASSERT_TRUE(Valid(p, alloc_needed, 'x'));
-      free(p);
+      tc_free(p);
     }
   }
 }

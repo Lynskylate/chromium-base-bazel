@@ -44,6 +44,13 @@
 #endif
 #include "tests/testutil.h"
 
+void* operator new(std::size_t sz) {
+  return tc_malloc(sz);
+}
+
+void operator delete(void* ptr) noexcept {
+  tc_free(ptr);
+}
 
 // When compiled 64-bit and run on systems with swap several unittests will end
 // up trying to consume all of RAM+swap, and that can take quite some time.  By

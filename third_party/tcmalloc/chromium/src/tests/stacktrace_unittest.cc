@@ -33,8 +33,11 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include "testutil.h"
 #include "base/commandlineflags.h"
 #include <gperftools/stacktrace.h>
+
+#include "testutil.h"
 
 #include "gtest/gtest.h"
 
@@ -128,7 +131,6 @@ void ATTRIBUTE_NOINLINE CheckStackTraceLeaf(void) {
     for (int i = 0; i < size; i++)
       printf("%s %p\n", strings[i], stack[i]);
     printf("CheckStackTrace() addr: %p\n", &CheckStackTrace);
-    free(strings);
   }
 #endif
 

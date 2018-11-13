@@ -51,21 +51,21 @@
 // run some tests that test the inner workings of tcmalloc and
 // break on debugallocation: that certain allocations are aligned
 // in a certain way (even though no standard requires it), and that
-// realloc() tries to minimize copying (which debug allocators don't
+// tc_realloc() tries to minimize copying (which debug allocators don't
 // care about).
 
 #include "config_for_unittests.h"
 // Complicated ordering requirements.  tcmalloc.h defines (indirectly)
-// _POSIX_C_SOURCE, which it needs so stdlib.h defines posix_memalign.
+// _POSIX_C_SOURCE, which it needs so stdlib.h defines tc_posix_memalign.
 // unistd.h, on the other hand, requires _POSIX_C_SOURCE to be unset,
 // at least on FreeBSD, in order to define sbrk.  The solution
 // is to #include unistd.h first.  This is safe because unistd.h
-// doesn't sub-include stdlib.h, so we'll still get posix_memalign
+// doesn't sub-include stdlib.h, so we'll still get tc_posix_memalign
 // when we #include stdlib.h.  Blah.
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>        // for testing sbrk hooks
 #endif
-#include "tcmalloc.h"      // must come early, to pick up posix_memalign
+#include "tcmalloc.h"      // must come early, to pick up tc_posix_memalign
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -98,48 +98,48 @@
 #include "tests/testutil.h"
 
 // Windows doesn't define pvalloc and a few other obsolete unix
-// functions; nor does it define posix_memalign (which is not obsolete).
+// functions; nor does it define tc_posix_memalign (which is not obsolete).
 #if defined(_WIN32)
 # define cfree free         // don't bother to try to test these obsolete fns
 # define valloc malloc
 # define pvalloc malloc
-// I'd like to map posix_memalign to _aligned_malloc, but _aligned_malloc
+// I'd like to map tc_posix_memalign to _aligned_malloc, but _aligned_malloc
 // must be paired with _aligned_free (not normal free), which is too
 // invasive a change to how we allocate memory here.  So just bail
 static bool kOSSupportsMemalign = false;
-static inline void* Memalign(size_t align, size_t size) {
+static inline void* tc_memalign(size_t align, size_t size) {
   //LOG(FATAL) << "memalign not supported on windows";
   exit(1);
   return NULL;
 }
 static inline int PosixMemalign(void** ptr, size_t align, size_t size) {
-  //LOG(FATAL) << "posix_memalign not supported on windows";
+  //LOG(FATAL) << "tc_posix_memalign not supported on windows";
   exit(1);
   return -1;
 }
 
-// OS X defines posix_memalign in some OS versions but not others;
+// OS X defines tc_posix_memalign in some OS versions but not others;
 // it's confusing enough to check that it's easiest to just not to test.
 #elif defined(__APPLE__)
 static bool kOSSupportsMemalign = false;
-static inline void* Memalign(size_t align, size_t size) {
+static inline void* tc_memalign(size_t align, size_t size) {
   //LOG(FATAL) << "memalign not supported on OS X";
   exit(1);
   return NULL;
 }
 static inline int PosixMemalign(void** ptr, size_t align, size_t size) {
-  //LOG(FATAL) << "posix_memalign not supported on OS X";
+  //LOG(FATAL) << "tc_posix_memalign not supported on OS X";
   exit(1);
   return -1;
 }
 
 #else
 static bool kOSSupportsMemalign = true;
-static inline void* Memalign(size_t align, size_t size) {
-  return memalign(align, size);
+static inline void* tc_memalign(size_t align, size_t size) {
+  return tc_memalign(align, size);
 }
 static inline int PosixMemalign(void** ptr, size_t align, size_t size) {
-  return posix_memalign(ptr, align, size);
+  return tc_posix_memalign(ptr, align, size);
 }
 
 #endif
@@ -354,7 +354,7 @@ class AllocatorState : public TestHarness {
   }
   virtual ~AllocatorState() {}
 
-  // Allocate memory.  Randomly choose between malloc() or posix_memalign().
+  // Allocate memory.  Randomly choose between tc_malloc() or tc_posix_memalign().
   void* alloc(size_t size) {
     if (Uniform(100) < memalign_fraction_ * 100) {
       // Try a few times to find a reasonable alignment, or fall back on malloc.
@@ -372,7 +372,7 @@ class AllocatorState : public TestHarness {
         }
       }
     }
-    return malloc(size);
+    return tc_malloc(size);
   }
 
  private:
@@ -497,7 +497,7 @@ class TesterThread {
     const int index = rnd_.Uniform(heap_.size());
     Object object = heap_[index];
     CheckContents(object);
-    free(object.ptr);
+    tc_free(object.ptr);
     heap_size_ -= object.size;
     heap_[index] = heap_[heap_.size()-1];
     heap_.pop_back();
@@ -618,9 +618,9 @@ static void TestHugeAllocations(AllocatorState* rnd) {
   for (size_t i = 0; i < 100; i++) {
     void* p = NULL;
     p = rnd->alloc(kMaxSignedSize + i);
-    if (p) free(p);    // if: free(NULL) is not necessarily defined
+    if (p) tc_free(p);    // if: tc_free(NULL) is not necessarily defined
     p = rnd->alloc(kMaxSignedSize - i);
-    if (p) free(p);
+    if (p) tc_free(p);
   }
 #endif
 
@@ -636,13 +636,13 @@ static void TestCalloc(size_t n, size_t s, bool ok) {
   if (FLAGS_verbose)
     fprintf(LOGSTREAM, "calloc(%" PRIxS ", %" PRIxS "): %p\n", n, s, p);
   if (!ok) {
-    CHECK(p == NULL);  // calloc(n, s) should not succeed
+    CHECK(p == NULL);  // tc_calloc(n, s) should not succeed
   } else {
-    CHECK(p != NULL);  // calloc(n, s) should succeed
+    CHECK(p != NULL);  // tc_calloc(n, s) should succeed
     for (int i = 0; i < n*s; i++) {
       CHECK(p[i] == '\0');
     }
-    free(p);
+    tc_free(p);
   }
 }
 
@@ -661,19 +661,19 @@ static void TestRealloc() {
   int deltas[] = { 1, -2, 4, -8, 16, -32, 64, -128 };
 
   for (int s = 0; s < sizeof(start_sizes)/sizeof(*start_sizes); ++s) {
-    void* p = malloc(start_sizes[s]);
+    void* p = tc_malloc(start_sizes[s]);
     CHECK(p);
     // The larger the start-size, the larger the non-reallocing delta.
     for (int d = 0; d < (s+1) * 2; ++d) {
-      void* new_p = realloc(p, start_sizes[s] + deltas[d]);
+      void* new_p = tc_realloc(p, start_sizes[s] + deltas[d]);
       CHECK(p == new_p);  // realloc should not allocate new memory
     }
     // Test again, but this time reallocing smaller first.
     for (int d = 0; d < s*2; ++d) {
-      void* new_p = realloc(p, start_sizes[s] - deltas[d]);
+      void* new_p = tc_realloc(p, start_sizes[s] - deltas[d]);
       CHECK(p == new_p);  // realloc should not allocate new memory
     }
-    free(p);
+    tc_free(p);
   }
   FLAGS_tcmalloc_sample_parameter = old_sample_parameter;
 #endif
@@ -807,11 +807,11 @@ MAKE_HOOK_CALLBACK(MunmapHook, const void *, size_t);
 MAKE_HOOK_CALLBACK(SbrkHook, const void *, ptrdiff_t);
 
 static void TestAlignmentForSize(int size) {
-  fprintf(LOGSTREAM, "Testing alignment of malloc(%d)\n", size);
+  fprintf(LOGSTREAM, "Testing alignment of tc_malloc(%d)\n", size);
   static const int kNum = 100;
   void* ptrs[kNum];
   for (int i = 0; i < kNum; i++) {
-    ptrs[i] = malloc(size);
+    ptrs[i] = tc_malloc(size);
     uintptr_t p = reinterpret_cast<uintptr_t>(ptrs[i]);
     CHECK((p % sizeof(void*)) == 0);
     CHECK((p % sizeof(double)) == 0);
@@ -823,7 +823,7 @@ static void TestAlignmentForSize(int size) {
     }
   }
   for (int i = 0; i < kNum; i++) {
-    free(ptrs[i]);
+    tc_free(ptrs[i]);
   }
 }
 
@@ -897,20 +897,20 @@ static bool HaveSystemRelease =
 
 static void TestRanges() {
   static const int MB = 1048576;
-  void* a = malloc(MB);
-  void* b = malloc(MB);
+  void* a = tc_malloc(MB);
+  void* b = tc_malloc(MB);
   base::MallocRange::Type releasedType =
       HaveSystemRelease ? base::MallocRange::UNMAPPED : base::MallocRange::FREE;
 
   CheckRangeCallback(a, base::MallocRange::INUSE, MB);
   CheckRangeCallback(b, base::MallocRange::INUSE, MB);
-  free(a);
+  tc_free(a);
   CheckRangeCallback(a, base::MallocRange::FREE, MB);
   CheckRangeCallback(b, base::MallocRange::INUSE, MB);
   MallocExtension::instance()->ReleaseFreeMemory();
   CheckRangeCallback(a, releasedType, MB);
   CheckRangeCallback(b, base::MallocRange::INUSE, MB);
-  free(b);
+  tc_free(b);
   CheckRangeCallback(a, releasedType, MB);
   CheckRangeCallback(b, base::MallocRange::FREE, MB);
 }
@@ -955,8 +955,8 @@ static void TestReleaseToSystem() {
   AggressiveDecommitChanger disabler(0);
 
   static const int MB = 1048576;
-  void* a = malloc(MB);
-  void* b = malloc(MB);
+  void* a = tc_malloc(MB);
+  void* b = tc_malloc(MB);
   MallocExtension::instance()->ReleaseFreeMemory();
   size_t starting_bytes = GetUnmappedBytes();
 
@@ -968,7 +968,7 @@ static void TestReleaseToSystem() {
   MallocExtension::instance()->ReleaseToSystem(MB);
   EXPECT_EQ(starting_bytes, GetUnmappedBytes());
 
-  free(a);
+  tc_free(a);
 
   // The span to release should be 1MB.
   MallocExtension::instance()->ReleaseToSystem(MB/2);
@@ -978,7 +978,7 @@ static void TestReleaseToSystem() {
   MallocExtension::instance()->ReleaseToSystem(MB/4);
   EXPECT_EQ(starting_bytes + MB, GetUnmappedBytes());
 
-  free(b);
+  tc_free(b);
 
   // Use up the extra MB/4 bytes from 'a' and also release 'b'.
   MallocExtension::instance()->ReleaseToSystem(MB/2);
@@ -992,8 +992,8 @@ static void TestReleaseToSystem() {
   MallocExtension::instance()->ReleaseFreeMemory();
   EXPECT_EQ(starting_bytes + 2*MB, GetUnmappedBytes());
 
-  a = malloc(MB);
-  free(a);
+  a = tc_malloc(MB);
+  tc_free(a);
   EXPECT_EQ(starting_bytes + MB, GetUnmappedBytes());
 
   // Releasing less than a page should still trigger a release.
@@ -1017,8 +1017,8 @@ static void TestAggressiveDecommit() {
   AggressiveDecommitChanger enabler(1);
 
   static const int MB = 1048576;
-  void* a = malloc(MB);
-  void* b = malloc(MB);
+  void* a = tc_malloc(MB);
+  void* b = tc_malloc(MB);
 
   size_t starting_bytes = GetUnmappedBytes();
 
@@ -1026,12 +1026,12 @@ static void TestAggressiveDecommit() {
   MallocExtension::instance()->ReleaseToSystem(MB);
   EXPECT_EQ(starting_bytes, GetUnmappedBytes());
 
-  free(a);
+  tc_free(a);
 
   // The span to release should be 1MB.
   EXPECT_EQ(starting_bytes + MB, GetUnmappedBytes());
 
-  free(b);
+  tc_free(b);
 
   EXPECT_EQ(starting_bytes + 2*MB, GetUnmappedBytes());
 
@@ -1039,8 +1039,8 @@ static void TestAggressiveDecommit() {
   MallocExtension::instance()->ReleaseFreeMemory();
   EXPECT_EQ(starting_bytes + 2*MB, GetUnmappedBytes());
 
-  a = malloc(MB);
-  free(a);
+  a = tc_malloc(MB);
+  tc_free(a);
 
   EXPECT_EQ(starting_bytes + 2*MB, GetUnmappedBytes());
 
@@ -1064,19 +1064,19 @@ static void TestSetNewMode() {
 
   g_old_handler = std::set_new_handler(&OnNoMemory);
   g_no_memory = false;
-  void* ret = malloc(kTooBig);
+  void* ret = tc_malloc(kTooBig);
   EXPECT_EQ(NULL, ret);
   EXPECT_TRUE(g_no_memory);
 
   g_old_handler = std::set_new_handler(&OnNoMemory);
   g_no_memory = false;
-  ret = calloc(1, kTooBig);
+  ret = tc_calloc(1, kTooBig);
   EXPECT_EQ(NULL, ret);
   EXPECT_TRUE(g_no_memory);
 
   g_old_handler = std::set_new_handler(&OnNoMemory);
   g_no_memory = false;
-  ret = realloc(NULL, kTooBig);
+  ret = tc_realloc(NULL, kTooBig);
   EXPECT_EQ(NULL, ret);
   EXPECT_TRUE(g_no_memory);
 
@@ -1087,7 +1087,7 @@ static void TestSetNewMode() {
 
     g_old_handler = std::set_new_handler(&OnNoMemory);
     g_no_memory = false;
-    ret = Memalign(kAlignment, kTooBig);
+    ret = tc_memalign(kAlignment, kTooBig);
     EXPECT_EQ(NULL, ret);
     EXPECT_TRUE(g_no_memory);
 
@@ -1106,13 +1106,13 @@ static void TestErrno(void) {
   void* ret;
   if (kOSSupportsMemalign) {
     errno = 0;
-    ret = Memalign(128, kTooBig);
+    ret = tc_memalign(128, kTooBig);
     EXPECT_EQ(NULL, ret);
     EXPECT_EQ(ENOMEM, errno);
   }
 
   errno = 0;
-  ret = malloc(kTooBig);
+  ret = tc_malloc(kTooBig);
   EXPECT_EQ(NULL, ret);
   EXPECT_EQ(ENOMEM, errno);
 
@@ -1140,9 +1140,9 @@ static void TestNAllocX() {
   for (size_t size = 0; size <= (1 << 20); size += 7) {
     size_t rounded = nallocx(size, 0);
     ASSERT_GE(rounded, size);
-    void* ptr = malloc(size);
+    void* ptr = tc_malloc(size);
     ASSERT_EQ(rounded, MallocExtension::instance()->GetAllocatedSize(ptr));
-    free(ptr);
+    tc_free(ptr);
   }
 }
 
@@ -1154,7 +1154,7 @@ static void TestNAllocXAlignment() {
       ASSERT_EQ(rounded % (1 << align), 0);
       void* ptr = tc_memalign(1 << align, size);
       ASSERT_EQ(rounded, MallocExtension::instance()->GetAllocatedSize(ptr));
-      free(ptr);
+      tc_free(ptr);
     }
   }
 }
@@ -1233,7 +1233,7 @@ static int RunAllTests(int argc, char** argv) {
       for ( int j = 0; j < size; j += (1 << 12) ) {
         static_cast<char*>(test1)[j] = 1;
       }
-      free(test1);
+      tc_free(test1);
     }
     // There may still be a bit of fragmentation at the beginning, until we
     // reach kPageMapBigAllocationThreshold bytes so we check for
@@ -1250,8 +1250,8 @@ static int RunAllTests(int argc, char** argv) {
     void* p2 = rnd.alloc(0);
     CHECK(p2 != NULL);
     CHECK(p1 != p2);
-    free(p1);
-    free(p2);
+    tc_free(p1);
+    tc_free(p2);
   }
 
   // This code stresses some of the memory allocation via STL.
@@ -1274,46 +1274,46 @@ static int RunAllTests(int argc, char** argv) {
     SetNewHook();      // defined as part of MAKE_HOOK_CALLBACK, above
     SetDeleteHook();   // ditto
 
-    void* p1 = malloc(10);
+    void* p1 = tc_malloc(10);
     CHECK(p1 != NULL);    // force use of this variable
     VerifyNewHookWasCalled();
     // Also test the non-standard tc_malloc_size
     size_t actual_p1_size = tc_malloc_size(p1);
     CHECK_GE(actual_p1_size, 10);
     CHECK_LT(actual_p1_size, 100000);   // a reasonable upper-bound, I think
-    free(p1);
+    tc_free(p1);
     VerifyDeleteHookWasCalled();
 
     p1 = tc_malloc_skip_new_handler(10);
     CHECK(p1 != NULL);
     VerifyNewHookWasCalled();
-    free(p1);
+    tc_free(p1);
     VerifyDeleteHookWasCalled();
 
-    p1 = calloc(10, 2);
+    p1 = tc_calloc(10, 2);
     CHECK(p1 != NULL);
     VerifyNewHookWasCalled();
     // We make sure we realloc to a big size, since some systems (OS
     // X) will notice if the realloced size continues to fit into the
     // malloc-block and make this a noop if so.
-    p1 = realloc(p1, 30000);
+    p1 = tc_realloc(p1, 30000);
     CHECK(p1 != NULL);
     VerifyNewHookWasCalled();
     VerifyDeleteHookWasCalled();
-    cfree(p1);  // synonym for free
+    tc_cfree(p1);  // synonym for free
     VerifyDeleteHookWasCalled();
 
     if (kOSSupportsMemalign) {
       CHECK_EQ(PosixMemalign(&p1, sizeof(p1), 40), 0);
       CHECK(p1 != NULL);
       VerifyNewHookWasCalled();
-      free(p1);
+      tc_free(p1);
       VerifyDeleteHookWasCalled();
 
-      p1 = Memalign(sizeof(p1) * 2, 50);
+      p1 = tc_memalign(sizeof(p1) * 2, 50);
       CHECK(p1 != NULL);
       VerifyNewHookWasCalled();
-      free(p1);
+      tc_free(p1);
       VerifyDeleteHookWasCalled();
     }
 
@@ -1326,16 +1326,16 @@ static int RunAllTests(int argc, char** argv) {
     VerifyDeleteHookWasCalled();
 #endif
 
-    p1 = valloc(60);
+    p1 = tc_valloc(60);
     CHECK(p1 != NULL);
     VerifyNewHookWasCalled();
-    free(p1);
+    tc_free(p1);
     VerifyDeleteHookWasCalled();
 
-    p1 = pvalloc(70);
+    p1 = tc_pvalloc(70);
     CHECK(p1 != NULL);
     VerifyNewHookWasCalled();
-    free(p1);
+    tc_free(p1);
     VerifyDeleteHookWasCalled();
 
     char* p2 = new char;
@@ -1458,7 +1458,7 @@ static int RunAllTests(int argc, char** argv) {
     p2 = strdup("in memory of James Golick");
     CHECK(p2 != NULL);
     VerifyNewHookWasCalled();
-    free(p2);
+    tc_free(p2);
     VerifyDeleteHookWasCalled();
 
 
@@ -1534,12 +1534,12 @@ static int RunAllTests(int argc, char** argv) {
     const int mb_to_allocate = 100;
     void* p = rnd.alloc(mb_to_allocate << 20);
     CHECK(p != NULL);  // could not allocate
-    free(p);
+    tc_free(p);
   }
 
   TestMallocAlignment();
 
-  // Check calloc() with various arguments
+  // Check tc_calloc() with various arguments
   fprintf(LOGSTREAM, "Testing calloc\n");
   TestCalloc(0, 0, true);
   TestCalloc(0, 1, true);
@@ -1599,7 +1599,7 @@ static int RunAllTests(int argc, char** argv) {
   for (int s = 0; ; s += (10<<20)) {
     void* large_object = rnd.alloc(s);
     if (large_object == NULL) break;
-    free(large_object);
+    tc_free(large_object);
   }
 #endif
 

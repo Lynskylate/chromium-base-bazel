@@ -31,7 +31,7 @@
 // ---
 // Author: Sanjay Ghemawat
 //
-// Test realloc() functionality
+// Test tc_realloc() functionality
 
 #include "config_for_unittests.h"
 #include <assert.h>                     // for assert
@@ -39,6 +39,8 @@
 #include <stddef.h>                     // for size_t, NULL
 #include <stdlib.h>                     // for free, malloc, realloc
 #include <algorithm>                    // for min
+
+#include "testutil.h"
 
 #include "gtest/gtest.h"
 
@@ -91,13 +93,13 @@ static int NextSize(int size) {
 TEST(ReallocUnitTest, Realloc) {
   for (int src_size = 0; src_size >= 0; src_size = NextSize(src_size)) {
     for (int dst_size = 0; dst_size >= 0; dst_size = NextSize(dst_size)) {
-      unsigned char *src = (unsigned char *) malloc(src_size);
+      unsigned char *src = (unsigned char *) tc_malloc(src_size);
       Fill(src, src_size);
-      unsigned char *dst = (unsigned char *) realloc(src, dst_size);
+      unsigned char *dst = (unsigned char *) tc_realloc(src, dst_size);
       ASSERT_TRUE(Valid(dst, min(src_size, dst_size)));
       Fill(dst, dst_size);
       ASSERT_TRUE(Valid(dst, dst_size));
-      if (dst != NULL) free(dst);
+      if (dst != NULL) tc_free(dst);
     }
   }
 
@@ -105,19 +107,19 @@ TEST(ReallocUnitTest, Realloc) {
   // packed cache, so some entries are evicted from the cache.
   // The cache has 2^12 entries, keyed by page number.
   const int kNumEntries = 1 << 14;
-  int **p = (int **) malloc(sizeof(*p) * kNumEntries);
+  int **p = (int **) tc_malloc(sizeof(*p) * kNumEntries);
   int sum = 0;
   for (int i = 0; i < kNumEntries; i++) {
-    p[i] = (int *) malloc(8192);   // no page size is likely to be bigger
+    p[i] = (int *) tc_malloc(8192);   // no page size is likely to be bigger
     p[i][1000] = i;              // use memory deep in the heart of p
   }
   for (int i = 0; i < kNumEntries; i++) {
-    p[i] = (int *) realloc(p[i], 9000);
+    p[i] = (int *) tc_realloc(p[i], 9000);
   }
   for (int i = 0; i < kNumEntries; i++) {
     sum += p[i][1000];
-    free(p[i]);
+    tc_free(p[i]);
   }
   ASSERT_EQ(kNumEntries / 2 * (kNumEntries - 1), sum);  // assume kNE is even
-  free(p);
+  tc_free(p);
 }

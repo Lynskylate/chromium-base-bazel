@@ -47,10 +47,10 @@ static void TestAllocation() {
   void* ptr[kNum];
   for (int size = 8; size <= 65536; size*=2) {
     for (int i = 0; i < kNum; i++) {
-      ptr[i] = malloc(size);
+      ptr[i] = tc_malloc(size);
     }
     for (int i = 0; i < kNum; i++) {
-      free(ptr[i]);
+      tc_free(ptr[i]);
     }
   }
 }
