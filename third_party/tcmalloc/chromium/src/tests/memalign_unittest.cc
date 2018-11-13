@@ -68,9 +68,9 @@
 #include <sys/malloc.h>
 #endif
 #include "base/basictypes.h"
-#include "base/logging.h"
 #include "tests/testutil.h"
 
+#include "gtest/gtest.h"
 
 // Return the next interesting size/delta to check.  Returns -1 if no more.
 static int NextSize(int size) {
@@ -105,7 +105,7 @@ static uintptr_t Number(void* p) {
 // Check alignment
 static void CheckAlignment(void* p, int align) {
   if ((Number(p) & (align-1)) != 0)
-    LOG(FATAL, "wrong alignment; wanted 0x%x; got %p\n", align, p);
+    FAIL() << "wrong alignment; wanted " << align << "; got " << p;
 }
 
 // Fill a buffer of the specified size with a predetermined pattern
@@ -128,23 +128,23 @@ static bool Valid(const void* p, int n, char seed) {
   return true;
 }
 
-int main(int argc, char** argv) {
+TEST(MemAlignUnitTest, MemAlign) {
   SetTestResourceLimit();
 
   // Try allocating data with a bunch of alignments and sizes
   for (int a = 1; a < 1048576; a *= 2) {
     for (int s = 0; s != -1; s = NextSize(s)) {
       void* ptr = memalign(a, s);
-      CheckAlignment(ptr, a);
+      ASSERT_NO_FATAL_FAILURE(CheckAlignment(ptr, a));
       Fill(ptr, s, 'x');
-      CHECK(Valid(ptr, s, 'x'));
+      ASSERT_TRUE(Valid(ptr, s, 'x'));
       free(ptr);
 
       if ((a >= sizeof(void*)) && ((a & (a-1)) == 0)) {
-        CHECK(posix_memalign(&ptr, a, s) == 0);
-        CheckAlignment(ptr, a);
+        ASSERT_EQ(posix_memalign(&ptr, a, s), 0);
+        ASSERT_NO_FATAL_FAILURE(CheckAlignment(ptr, a));
         Fill(ptr, s, 'y');
-        CHECK(Valid(ptr, s, 'y'));
+        ASSERT_TRUE(Valid(ptr, s, 'y'));
         free(ptr);
       }
     }
@@ -155,15 +155,15 @@ int main(int argc, char** argv) {
     void* p1 = memalign(1<<20, 1<<19);
     void* p2 = memalign(1<<19, 1<<19);
     void* p3 = memalign(1<<21, 1<<19);
-    CheckAlignment(p1, 1<<20);
-    CheckAlignment(p2, 1<<19);
-    CheckAlignment(p3, 1<<21);
+    ASSERT_NO_FATAL_FAILURE(CheckAlignment(p1, 1<<20));
+    ASSERT_NO_FATAL_FAILURE(CheckAlignment(p2, 1<<19));
+    ASSERT_NO_FATAL_FAILURE(CheckAlignment(p3, 1<<21));
     Fill(p1, 1<<19, 'a');
     Fill(p2, 1<<19, 'b');
     Fill(p3, 1<<19, 'c');
-    CHECK(Valid(p1, 1<<19, 'a'));
-    CHECK(Valid(p2, 1<<19, 'b'));
-    CHECK(Valid(p3, 1<<19, 'c'));
+    ASSERT_TRUE(Valid(p1, 1<<19, 'a'));
+    ASSERT_TRUE(Valid(p2, 1<<19, 'b'));
+    ASSERT_TRUE(Valid(p3, 1<<19, 'c'));
     free(p1);
     free(p2);
     free(p3);
@@ -172,21 +172,21 @@ int main(int argc, char** argv) {
   {
     // posix_memalign
     void* ptr;
-    CHECK(posix_memalign(&ptr, 0, 1) == EINVAL);
-    CHECK(posix_memalign(&ptr, sizeof(void*)/2, 1) == EINVAL);
-    CHECK(posix_memalign(&ptr, sizeof(void*)+1, 1) == EINVAL);
-    CHECK(posix_memalign(&ptr, 4097, 1) == EINVAL);
+    ASSERT_EQ(posix_memalign(&ptr, 0, 1), EINVAL);
+    ASSERT_EQ(posix_memalign(&ptr, sizeof(void*)/2, 1), EINVAL);
+    ASSERT_EQ(posix_memalign(&ptr, sizeof(void*)+1, 1), EINVAL);
+    ASSERT_EQ(posix_memalign(&ptr, 4097, 1), EINVAL);
 
     // Grab some memory so that the big allocation below will definitely fail.
     void* p_small = malloc(4*1048576);
-    CHECK(p_small != NULL);
+    ASSERT_NE(p_small, nullptr);
 
     // Make sure overflow is returned as ENOMEM
     const size_t zero = 0;
     static const size_t kMinusNTimes = 10;
     for ( size_t i = 1; i < kMinusNTimes; ++i ) {
       int r = posix_memalign(&ptr, 1024, zero - i);
-      CHECK(r == ENOMEM);
+      ASSERT_EQ(r, ENOMEM);
     }
 
     free(p_small);
@@ -197,9 +197,9 @@ int main(int argc, char** argv) {
     // valloc
     for (int s = 0; s != -1; s = NextSize(s)) {
       void* p = valloc(s);
-      CheckAlignment(p, pagesize);
+      ASSERT_NO_FATAL_FAILURE(CheckAlignment(p, pagesize));
       Fill(p, s, 'v');
-      CHECK(Valid(p, s, 'v'));
+      ASSERT_TRUE(Valid(p, s, 'v'));
       free(p);
     }
   }
@@ -208,14 +208,11 @@ int main(int argc, char** argv) {
     // pvalloc
     for (int s = 0; s != -1; s = NextSize(s)) {
       void* p = pvalloc(s);
-      CheckAlignment(p, pagesize);
+      ASSERT_NO_FATAL_FAILURE(CheckAlignment(p, pagesize));
       int alloc_needed = ((s + pagesize - 1) / pagesize) * pagesize;
       Fill(p, alloc_needed, 'x');
-      CHECK(Valid(p, alloc_needed, 'x'));
+      ASSERT_TRUE(Valid(p, alloc_needed, 'x'));
       free(p);
     }
   }
-
-  printf("PASS\n");
-  return 0;
 }

@@ -9,8 +9,9 @@
 #include "page_heap.h"
 #include "system-alloc.h"
 #include <stdio.h>
-#include "base/logging.h"
 #include "common.h"
+
+#include "gtest/gtest.h"
 
 DECLARE_int64(tcmalloc_heap_limit_mb);
 
@@ -20,7 +21,7 @@ namespace {
 // system page size.
 static bool HaveSystemRelease =
     TCMalloc_SystemRelease(
-      TCMalloc_SystemAlloc(getpagesize(), NULL, 0), getpagesize());
+      TCMalloc_SystemAlloc(getpagesize(), nullptr, 0), getpagesize());
 
 static void CheckStats(const tcmalloc::PageHeap* ph,
                        uint64_t system_pages,
@@ -38,7 +39,7 @@ static void CheckStats(const tcmalloc::PageHeap* ph,
   EXPECT_EQ(unmapped_pages, stats.unmapped_bytes >> kPageShift);
 }
 
-static void TestPageHeap_Stats() {
+TEST(PageHeapUnitTest, PageHeapStats) {
   tcmalloc::PageHeap* ph = new tcmalloc::PageHeap();
 
   // Empty page heap
@@ -61,20 +62,21 @@ static void TestPageHeap_Stats() {
   ph->Delete(s1);
   CheckStats(ph, 256, 128, 128);
 
+  FLAGS_tcmalloc_heap_limit_mb = 0;
   delete ph;
 }
 
-static void TestPageHeap_Limit() {
+TEST(PageHeapUnitTest, PageHeapLimit) {
   tcmalloc::PageHeap* ph = new tcmalloc::PageHeap();
 
-  CHECK_EQ(kMaxPages, 1 << (20 - kPageShift));
+  ASSERT_EQ(kMaxPages, 1 << (20 - kPageShift));
 
   // We do not know much is taken from the system for other purposes,
   // so we detect the proper limit:
   {
     FLAGS_tcmalloc_heap_limit_mb = 1;
-    tcmalloc::Span* s = NULL;
-    while((s = ph->New(kMaxPages)) == NULL) {
+    tcmalloc::Span* s = nullptr;
+    while((s = ph->New(kMaxPages)) == nullptr) {
       FLAGS_tcmalloc_heap_limit_mb++;
     }
     FLAGS_tcmalloc_heap_limit_mb += 9;
@@ -87,9 +89,9 @@ static void TestPageHeap_Limit() {
     tcmalloc::Span * spans[10];
     for (int i=0; i<10; ++i) {
       spans[i] = ph->New(kMaxPages);
-      EXPECT_NE(spans[i], NULL);
+      ASSERT_NE(spans[i], nullptr);
     }
-    EXPECT_EQ(ph->New(kMaxPages), NULL);
+    ASSERT_EQ(ph->New(kMaxPages), nullptr);
 
     for (int i=0; i<10; i += 2) {
       ph->Delete(spans[i]);
@@ -99,14 +101,14 @@ static void TestPageHeap_Limit() {
 
     if (HaveSystemRelease) {
       // EnsureLimit should release deleted normal spans
-      EXPECT_NE(defragmented, NULL);
-      EXPECT_TRUE(ph->CheckExpensive());
+      ASSERT_NE(defragmented, nullptr);
+      ASSERT_TRUE(ph->CheckExpensive());
       ph->Delete(defragmented);
     }
     else
     {
-      EXPECT_EQ(defragmented, NULL);
-      EXPECT_TRUE(ph->CheckExpensive());
+      ASSERT_EQ(defragmented, nullptr);
+      ASSERT_TRUE(ph->CheckExpensive());
     }
 
     for (int i=1; i<10; i += 2) {
@@ -119,11 +121,11 @@ static void TestPageHeap_Limit() {
     tcmalloc::Span * spans[20];
     for (int i=0; i<20; ++i) {
       spans[i] = ph->New(kMaxPages >> 1);
-      EXPECT_NE(spans[i], NULL);
+      ASSERT_NE(spans[i], nullptr);
     }
     // one more half size allocation may be possible:
     tcmalloc::Span * lastHalf = ph->New(kMaxPages >> 1);
-    EXPECT_EQ(ph->New(kMaxPages >> 1), NULL);
+    ASSERT_EQ(ph->New(kMaxPages >> 1), nullptr);
 
     for (int i=0; i<20; i += 2) {
       ph->Delete(spans[i]);
@@ -133,37 +135,24 @@ static void TestPageHeap_Limit() {
     {
       if(len <= kMaxPages >> 1 || HaveSystemRelease) {
         tcmalloc::Span *s = ph->New(len);
-        EXPECT_NE(s, NULL);
+        ASSERT_NE(s, nullptr);
         ph->Delete(s);
       }
     }
 
-    EXPECT_TRUE(ph->CheckExpensive());
+    ASSERT_TRUE(ph->CheckExpensive());
 
     for (int i=1; i<20; i += 2) {
       ph->Delete(spans[i]);
     }
 
-    if (lastHalf != NULL) {
+    if (lastHalf != nullptr) {
       ph->Delete(lastHalf);
     }
   }
 
+  FLAGS_tcmalloc_heap_limit_mb = 0;
   delete ph;
 }
 
 }  // namespace
-
-int main(int argc, char **argv) {
-  TestPageHeap_Stats();
-  TestPageHeap_Limit();
-  printf("PASS\n");
-  // on windows as part of library destructors we call getenv which
-  // calls malloc which fails due to our exhausted heap limit. It then
-  // causes fancy stack overflow because log message we're printing
-  // for failed allocation somehow cause malloc calls too
-  //
-  // To keep us out of trouble we just drop malloc limit
-  FLAGS_tcmalloc_heap_limit_mb = 0;
-  return 0;
-}

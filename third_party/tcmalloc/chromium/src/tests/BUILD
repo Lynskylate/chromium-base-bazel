@@ -87,8 +87,6 @@ cc_test(
     deps = [":test_util"],
 )
 
-# TODO keep going with migrating tests
-
 cc_test(
     name = "malloc_extension_test",
     srcs = [
@@ -109,14 +107,64 @@ cc_test(
     deps = [":test_util"],
 )
 
-# TODO continue with unit tests
+cc_test(
+    name = "markidle_unittest",
+    srcs = [
+        "markidle_unittest.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
 
-#cc_test(
-#    name = "markidle_unittest",
-#    srcs = [
-#        "markidle_unittest.cc",
-#    ],
-#    copts = CXXOPTS,
-#    licenses = ["permissive"],
-#    deps = [":test_util"],
-#)
+cc_test(
+    name = "memalign_unittest",
+    srcs = [
+        "memalign_unittest.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
+
+cc_test(
+    name = "packed_cache_test",
+    srcs = [
+        "packed-cache_test.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
+
+cc_test(
+    name = "page_heap_test",
+    srcs = [
+        "page_heap_test.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
+
+cc_test(
+    name = "pagemap_unittest",
+    srcs = [
+        "pagemap_unittest.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
+
+cc_test(
+    name = "profile_handler_unittest",
+    srcs = [
+        "profile-handler_unittest.cc",
+    ],
+    copts = CXXOPTS,
+    licenses = ["permissive"],
+    deps = [":test_util"],
+)
+
+# TODO continue with test migration

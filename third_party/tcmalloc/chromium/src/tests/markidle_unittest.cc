@@ -35,6 +35,7 @@
 #include <stdio.h>
 
 #include "config_for_unittests.h"
+//#include "base/logging.h"
 #include <gperftools/malloc_extension.h>
 #include "tests/testutil.h"   // for RunThread()
 
@@ -72,34 +73,32 @@ static void MultipleIdleNonIdlePhases() {
 }
 
 // Get current thread cache usage
-static size_t GetTotalThreadCacheSize() {
-  size_t result;
+static void GetTotalThreadCacheSize(size_t *result) {
   ASSERT_TRUE(MallocExtension::instance()->GetNumericProperty(
-            "tcmalloc.current_total_thread_cache_bytes",
-            &result));
-  return result;
+          "tcmalloc.current_total_thread_cache_bytes",
+          result));
 }
 
 // Check that MarkThreadIdle() actually reduces the amount
 // of per-thread memory.
-TEST(MarkIdleUnitTest, IdleUsage) {
+static void TestIdleUsage() {
   size_t original;
-
-  ASSERT_TRUE(MallocExtension::instance()->GetNumericProperty(
-    "tcmalloc.current_total_thread_cache_bytes", &original));
+  ASSERT_NO_FATAL_FAILURE(GetTotalThreadCacheSize(&original));
 
   TestAllocation();
-  const size_t post_allocation = GetTotalThreadCacheSize();
+  size_t post_allocation;
+  ASSERT_NO_FATAL_FAILURE(GetTotalThreadCacheSize(&post_allocation));
   ASSERT_GT(post_allocation, original);
 
   MallocExtension::instance()->MarkThreadIdle();
-  const size_t post_idle = GetTotalThreadCacheSize();
+  size_t post_idle;
+  ASSERT_NO_FATAL_FAILURE(GetTotalThreadCacheSize(&post_idle));
   ASSERT_LE(post_idle, original);
 
   // Log after testing because logging can allocate heap memory.
-  //VLOG(0, "Original usage: %" PRIuS "\n", original);
-  //VLOG(0, "Post allocation: %" PRIuS "\n", post_allocation);
-  //VLOG(0, "Post idle: %" PRIuS "\n", post_idle);
+  printf("Original usage: %" PRIuS "\n", original);
+  printf("Post allocation: %" PRIuS "\n", post_allocation);
+  printf("Post idle: %" PRIuS "\n", post_idle);
 }
 
 static void TestTemporarilyIdleUsage() {
@@ -114,18 +113,15 @@ static void TestTemporarilyIdleUsage() {
   ASSERT_EQ(post_idle, 0);
 
   // Log after testing because logging can allocate heap memory.
-  //VLOG(0, "Original usage: %" PRIuS "\n", original);
-  //VLOG(0, "Post allocation: %" PRIuS "\n", post_allocation);
-  //VLOG(0, "Post idle: %" PRIuS "\n", post_idle);
+  printf("Original usage: %" PRIuS "\n", original);
+  printf("Post allocation: %" PRIuS "\n", post_allocation);
+  printf("Post idle: %" PRIuS "\n", post_idle);
 }
-/*
-int main(int argc, char** argv) {
+
+TEST(MarkIdleUnitTest, MarkIdle) {
   RunThread(&TestIdleUsage);
   RunThread(&TestAllocation);
   RunThread(&MultipleIdleCalls);
   RunThread(&MultipleIdleNonIdlePhases);
   RunThread(&TestTemporarilyIdleUsage);
-
-  printf("PASS\n");
-  return 0;
-}*/
+}
