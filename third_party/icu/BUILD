@@ -9,7 +9,23 @@ shared_defs = [
     # No dependency on the default platform encoding.
     # Will cut down the code size.
     "U_CHARSET_IS_UTF8=1",
+    "UCHAR_TYPE=uint16_t",
 ]
+
+cc_library(
+    name = "headers",
+    hdrs = glob([
+        "source/common/**/*.h",
+        "source/i18n/**/*.h",
+    ]),
+    defines = shared_defs,
+    includes = [
+        ".",
+        "source/common",
+        "source/i18n",
+    ],
+    licenses = ["permissive"],
+)
 
 cc_library(
     name = "icui18n",
@@ -243,9 +259,6 @@ cc_library(
         "source/i18n/zrule.cpp",
         "source/i18n/ztrans.cpp",
     ],
-    hdrs = glob([
-        "source/i18n/**/*.h",
-    ]),
     copts = [
         "-Wno-deprecated-declarations",
         "-frtti",
@@ -253,13 +266,10 @@ cc_library(
     defines = shared_defs + [
         "U_I18N_IMPLEMENTATION",
     ],
-    includes = [
-        ".",
-        "source/i18n",
-    ],
     licenses = ["permissive"],
     linkstatic = True,
     deps = [
+        ":headers",
         ":icuuc",
     ],
 )
@@ -457,9 +467,6 @@ cc_library(
         "source/common/uvectr64.cpp",
         "source/common/wintz.cpp",
     ],
-    hdrs = glob([
-        "source/common/**/*.h",
-    ]),
     copts = [
         "-Wno-deprecated-declarations",
         "-Wno-unused-function",
@@ -468,10 +475,9 @@ cc_library(
     defines = shared_defs + [
         "U_COMMON_IMPLEMENTATION",
     ],
-    includes = [
-        ".",
-        "source/common",
-    ],
     licenses = ["permissive"],
     linkstatic = True,
+    deps = [
+        ":headers",
+    ],
 )
