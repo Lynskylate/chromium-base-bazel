@@ -304,56 +304,41 @@ UChar32 MutableCodePointTrie::getRange(
     uint32_t nullValue = initialValue;
     if (filter != nullptr) { nullValue = filter(context, nullValue); }
     UChar32 c = start;
-    uint32_t trieValue, value;
+    uint32_t value;
     bool haveValue = false;
     int32_t i = c >> UCPTRIE_SHIFT_3;
     do {
         if (flags[i] == ALL_SAME) {
-            uint32_t trieValue2 = index[i];
+            uint32_t value2 = maybeFilterValue(index[i], initialValue, nullValue,
+                                               filter, context);
             if (haveValue) {
-                if (trieValue2 != trieValue) {
-                    if (filter == nullptr ||
-                            maybeFilterValue(trieValue2, initialValue, nullValue,
-                                             filter, context) != value) {
-                        return c - 1;
-                    }
-                    trieValue = trieValue2;  // may or may not help
+                if (value2 != value) {
+                    return c - 1;
                 }
             } else {
-                trieValue = trieValue2;
-                value = maybeFilterValue(trieValue2, initialValue, nullValue, filter, context);
+                value = value2;
                 if (pValue != nullptr) { *pValue = value; }
                 haveValue = true;
             }
             c = (c + UCPTRIE_SMALL_DATA_BLOCK_LENGTH) & ~UCPTRIE_SMALL_DATA_MASK;
         } else /* MIXED */ {
             int32_t di = index[i] + (c & UCPTRIE_SMALL_DATA_MASK);
-            uint32_t trieValue2 = data[di];
+            uint32_t value2 = maybeFilterValue(data[di], initialValue, nullValue,
+                                               filter, context);
             if (haveValue) {
-                if (trieValue2 != trieValue) {
-                    if (filter == nullptr ||
-                            maybeFilterValue(trieValue2, initialValue, nullValue,
-                                             filter, context) != value) {
-                        return c - 1;
-                    }
-                    trieValue = trieValue2;  // may or may not help
+                if (value2 != value) {
+                    return c - 1;
                 }
             } else {
-                trieValue = trieValue2;
-                value = maybeFilterValue(trieValue2, initialValue, nullValue, filter, context);
+                value = value2;
                 if (pValue != nullptr) { *pValue = value; }
                 haveValue = true;
             }
             while ((++c & UCPTRIE_SMALL_DATA_MASK) != 0) {
-                trieValue2 = data[++di];
-                if (trieValue2 != trieValue) {
-                    if (filter == nullptr ||
-                            maybeFilterValue(trieValue2, initialValue, nullValue,
-                                             filter, context) != value) {
-                        return c - 1;
-                    }
+                if (maybeFilterValue(data[++di], initialValue, nullValue,
+                                     filter, context) != value) {
+                    return c - 1;
                 }
-                trieValue = trieValue2;  // may or may not help
             }
         }
         ++i;

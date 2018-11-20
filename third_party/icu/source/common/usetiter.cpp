@@ -116,7 +116,7 @@ void UnicodeSetIterator::reset() {
         stringCount = 0;
     } else {
         endRange = set->getRangeCount() - 1;
-        stringCount = set->stringsSize();
+        stringCount = set->strings->size();
     }
     range = 0;
     endElement = -1;

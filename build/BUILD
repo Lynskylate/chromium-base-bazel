@@ -5,6 +5,7 @@ cc_library(
     hdrs = [
         "build_config.h",
         "buildflag.h",
+        "compiler_specific.h",
         "symbol_export.h",
     ],
     linkstatic = True,

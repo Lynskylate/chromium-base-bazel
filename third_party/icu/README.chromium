@@ -206,7 +206,7 @@ D. Local Modifications
      windowsZones.txt
      zoneinfo64.txt
 
-  As of Oct 27, 2018, the latest version is 2018g and the above files
+  As of Oct 18, 2018, the latest version is 2018f and the above files
   are available at the ICU github repos.
 
 4. Build-related changes
@@ -265,4 +265,3 @@ D. Local Modifications
     https://unicode-org.atlassian.net/browse/ICU-20250
   - Fix:
     https://github.com/unicode-org/icu/pull/265
-    https://github.com/unicode-org/icu/pull/278

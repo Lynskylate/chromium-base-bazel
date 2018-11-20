@@ -47,6 +47,10 @@
 
 U_NAMESPACE_USE
 
+// initial storage. Must be >= 0
+// *** same as in uniset.cpp ! ***
+#define START_EXTRA 16
+
 // Define UChar constants using hex for EBCDIC compatibility
 // Used #define to reduce private static exports and memory access time.
 #define SET_OPEN        ((UChar)0x005B) /*[*/
@@ -181,8 +185,21 @@ isPOSIXClose(const UnicodeString &pattern, int32_t pos) {
  * @param pattern a string specifying what characters are in the set
  */
 UnicodeSet::UnicodeSet(const UnicodeString& pattern,
-                       UErrorCode& status) {
-    applyPattern(pattern, status);
+                       UErrorCode& status) :
+    len(0), capacity(START_EXTRA), list(0), bmpSet(0), buffer(0),
+    bufferCapacity(0), patLen(0), pat(NULL), strings(NULL), stringSpan(NULL),
+    fFlags(0)
+{
+    if(U_SUCCESS(status)){
+        list = (UChar32*) uprv_malloc(sizeof(UChar32) * capacity);
+        /* test for NULL */
+        if(list == NULL) {
+            status = U_MEMORY_ALLOCATION_ERROR;  
+        }else{
+            allocateStrings(status);
+            applyPattern(pattern, status);
+        }
+    }
     _dbgct(this);
 }
 
@@ -696,27 +713,12 @@ static UBool numericValueFilter(UChar32 ch, void* context) {
     return u_getNumericValue(ch) == *(double*)context;
 }
 
-static UBool generalCategoryMaskFilter(UChar32 ch, void* context) {
-    int32_t value = *(int32_t*)context;
-    return (U_GET_GC_MASK((UChar32) ch) & value) != 0;
-}
-
 static UBool versionFilter(UChar32 ch, void* context) {
     static const UVersionInfo none = { 0, 0, 0, 0 };
     UVersionInfo v;
     u_charAge(ch, v);
     UVersionInfo* version = (UVersionInfo*)context;
     return uprv_memcmp(&v, &none, sizeof(v)) > 0 && uprv_memcmp(&v, version, sizeof(v)) <= 0;
-}
-
-typedef struct {
-    UProperty prop;
-    int32_t value;
-} IntPropertyContext;
-
-static UBool intPropertyFilter(UChar32 ch, void* context) {
-    IntPropertyContext* c = (IntPropertyContext*)context;
-    return u_getIntPropertyValue((UChar32) ch, c->prop) == c->value;
 }
 
 static UBool scriptExtensionsFilter(UChar32 ch, void* context) {
@@ -779,6 +781,43 @@ void UnicodeSet::applyFilter(UnicodeSet::Filter filter,
 
 namespace {
 
+/** Maps map values to 1 if the mask contains their value'th bit, all others to 0. */
+uint32_t U_CALLCONV generalCategoryMaskFilter(const void *context, uint32_t value) {
+    uint32_t mask = *(const uint32_t *)context;
+    value = U_MASK(value) & mask;
+    if (value != 0) { value = 1; }
+    return value;
+}
+
+/** Maps one map value to 1, all others to 0. */
+uint32_t U_CALLCONV intValueFilter(const void *context, uint32_t value) {
+    uint32_t v = *(const uint32_t *)context;
+    return value == v ? 1 : 0;
+}
+
+}  // namespace
+
+void UnicodeSet::applyIntPropertyValue(const UCPMap *map,
+                                       UCPMapValueFilter *filter, const void *context,
+                                       UErrorCode &errorCode) {
+    if (U_FAILURE(errorCode)) { return; }
+    clear();
+    UChar32 start = 0, end;
+    uint32_t value;
+    while ((end = ucpmap_getRange(map, start, UCPMAP_RANGE_NORMAL, 0,
+                                  filter, context, &value)) >= 0) {
+        if (value != 0) {
+            add(start, end);
+        }
+        start = end + 1;
+    }
+    if (isBogus()) {
+        errorCode = U_MEMORY_ALLOCATION_ERROR;
+    }
+}
+
+namespace {
+
 static UBool mungeCharName(char* dst, const char* src, int32_t dstCapacity) {
     /* Note: we use ' ' in compiler code page */
     int32_t j = 0;
@@ -806,10 +845,11 @@ static UBool mungeCharName(char* dst, const char* src, int32_t dstCapacity) {
 
 UnicodeSet&
 UnicodeSet::applyIntPropertyValue(UProperty prop, int32_t value, UErrorCode& ec) {
-    if (U_FAILURE(ec) || isFrozen()) { return *this; }
+    if (U_FAILURE(ec)) { return *this; }
+    // All of the following check isFrozen() before modifying this set.
     if (prop == UCHAR_GENERAL_CATEGORY_MASK) {
-        const UnicodeSet* inclusions = CharacterProperties::getInclusionsForProperty(prop, ec);
-        applyFilter(generalCategoryMaskFilter, &value, inclusions, ec);
+        const UCPMap *map = u_getIntPropertyMap(UCHAR_GENERAL_CATEGORY, &ec);
+        applyIntPropertyValue(map, generalCategoryMaskFilter, &value, ec);
     } else if (prop == UCHAR_SCRIPT_EXTENSIONS) {
         const UnicodeSet* inclusions = CharacterProperties::getInclusionsForProperty(prop, ec);
         UScriptCode script = (UScriptCode)value;
@@ -826,11 +866,14 @@ UnicodeSet::applyIntPropertyValue(UProperty prop, int32_t value, UErrorCode& ec)
             clear();
         }
     } else if (UCHAR_INT_START <= prop && prop < UCHAR_INT_LIMIT) {
-        const UnicodeSet* inclusions = CharacterProperties::getInclusionsForProperty(prop, ec);
-        IntPropertyContext c = {prop, value};
-        applyFilter(intPropertyFilter, &c, inclusions, ec);
+        const UCPMap *map = u_getIntPropertyMap(prop, &ec);
+        applyIntPropertyValue(map, intValueFilter, &value, ec);
     } else {
+        // This code used to always call getInclusions(property source)
+        // which sets an error for an unsupported property.
         ec = U_ILLEGAL_ARGUMENT_ERROR;
+        // Otherwise we would just clear() this set because
+        // getIntPropertyValue(c, prop) returns 0 for all code points.
     }
     return *this;
 }
